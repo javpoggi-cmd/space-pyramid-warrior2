@@ -40,10 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
             slowShotDuration: 15000,
         },
         drones: {
-            orbitRadius: 100,
+            orbitRadius: 60,
             rotationSpeed: 0.04,
             shootCooldown: 2000,
-            bulletSpeed: 15, // CAMBIO 1: Velocidad de bala de dron aumentada
+            bulletSpeed: 15, 
         },
         missiles: {
             maxCharges: 3,
@@ -181,14 +181,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Variables de estado del jugador ---
     let playerLives, playerHealth;
     let shieldStacks = 0; 
+    let shieldVisuals = [];
     let isGodMode = false;
     let isInvulnerable = false;
     let playerLastShotTime = 0;
     let burstFireLevel = 0;
-    let wingCannonsActive = false;
+    let rapidFireTimeout;
+    let wingCannonsLevel = 0;
     let heavyCannonLevel = 0;
     let heavyCannonTimeout;
-    let laserActive = false;
+    let laserLevel = 0; 
     let laserTimeout;
     let missileSystemActive = false;
     let missileCharges = 0;
@@ -219,6 +221,12 @@ document.addEventListener('DOMContentLoaded', () => {
         asteroid3_d: 'img/asteroid3_d.png', asteroid3_e: 'img/asteroid3_e.png', asteroid3_f: 'img/asteroid3_f.png',
         asteroid4_a: 'img/asteroid4_a.png', asteroid4_b: 'img/asteroid4_b.png', asteroid4_c: 'img/asteroid4_c.png',
         asteroid4_d: 'img/asteroid4_d.png', asteroid4_e: 'img/asteroid4_e.png', asteroid4_f: 'img/asteroid4_f.png',
+        asteroid5_a: 'img/asteroid5_a.png', 
+asteroid5_b: 'img/asteroid5_b.png',
+asteroid5_c: 'img/asteroid5_c.png',
+asteroid5_d: 'img/asteroid5_d.png',
+asteroid5_e: 'img/asteroid5_e.png',
+asteroid5_f: 'img/asteroid5_f.png',
         asteroidShot_a: 'img/asteroid_shot_a.png', asteroidShot_b: 'img/asteroid_shot_b.png', asteroidShot_c: 'img/asteroid_shot_c.png',
         asteroidShot_d: 'img/asteroid_shot_d.png', asteroidShot_e: 'img/asteroid_shot_e.png', asteroidShot_f: 'img/asteroid_shot_f.png',
         powerupHealth: 'img/powerup_health.png', powerupRapidFire: 'img/powerup_rapidfire.png', powerupExtraLife: 'img/powerup_extralife.png', powerupWings: 'img/powerup_wings.png', powerupHeavy: 'img/powerup_heavy.png', powerupMissile: 'img/powerup_missile.png', powerupBomb: 'img/powerup_bomb.png', powerupDrone: 'img/powerup_drone.png', 
@@ -309,16 +317,105 @@ document.addEventListener('DOMContentLoaded', () => {
     function playSound(sound, volume = 1.0) { if (isSfxOn && sound) { const soundInstance = sound.cloneNode(); soundInstance.volume = sfxVolume * volume; soundInstance.play().catch(e => {}); } }
     
     // --- Clases del Juego ---
-    class Player { constructor() { this.image = assets.player; this.width = GAME_CONFIG.player.width * scaleFactor; this.height = GAME_CONFIG.player.height * scaleFactor; this.x = canvas.width / 2 - this.width / 2; this.y = canvas.height + this.height; this.speed = GAME_CONFIG.player.speed * scaleFactor; this.isPositioned = false; } draw() { if (this.image) { if (isInvulnerable) { ctx.globalAlpha = (Math.floor(Date.now() / 100) % 2 === 0) ? 0.5 : 1; } ctx.drawImage(this.image, this.x, this.y, this.width, this.height); ctx.globalAlpha = 1; } } update() { if (!this.isPositioned) { const targetY = canvas.height - 150 * scaleFactor; if (this.y > targetY) { this.y -= 2 * scaleFactor; } else { this.y = targetY; this.isPositioned = true; } return; } let moveX = 0; let moveY = 0; if (keys['arrowleft'] || keys['a']) moveX -= 1; if (keys['arrowright'] || keys['d']) moveX += 1; if (keys['arrowup'] || keys['w']) moveY -= 1; if (keys['arrowdown'] || keys['s']) moveY += 1; const gamepad = navigator.getGamepads()[0]; if (gamepad) { const stickX = gamepad.axes[0]; const stickY = gamepad.axes[1]; const deadzone = 0.2; if (Math.abs(stickX) > deadzone) moveX = stickX; if (Math.abs(stickY) > deadzone) moveY = stickY; if (gamepad.buttons[14] && gamepad.buttons[14].pressed) moveX = -1; if (gamepad.buttons[15] && gamepad.buttons[15].pressed) moveX = 1; if (gamepad.buttons[12] && gamepad.buttons[12].pressed) moveY = -1; if (gamepad.buttons[13] && gamepad.buttons[13].pressed) moveY = 1; if (gamepad.buttons[0].pressed) { this.shoot(); } if (gamepad.buttons[7] && gamepad.buttons[7].wasPressed) { launchMissile(); } } if (touchMoveX) moveX = touchMoveX; if (touchMoveY) moveY = touchMoveY; if (moveX !== 0) this.x += this.speed * moveX; if (moveY !== 0) this.y += this.speed * moveY; if (this.x < 0) this.x = 0; if (this.x > canvas.width - this.width) this.x = canvas.width - this.width; if (this.y < 0) this.y = 0; if (this.y > canvas.height - this.height) this.y = canvas.height - this.height; } shoot() { 
-        const now = Date.now();
-        let baseCooldown = DIFFICULTY_SETTINGS[difficultyLevel].shootCooldown;
-        if (slowShotStacks > 0) { baseCooldown *= (1 + (0.5 * slowShotStacks)); }
-        if (laserActive) { if (now - playerLastShotTime < GAME_CONFIG.powerups.laserShootCooldown) return; playSound(audioAssets.laserShoot, 0.8); laserBeams.push(new LaserBeam(this.x + this.width / 2, this.y));
-        } else if (heavyCannonLevel > 0) { if (now - playerLastShotTime < baseCooldown * 1.5) return; playSound(audioAssets.heavyShoot, 0.8); const shots = heavyCannonLevel; for (let i = 0; i < shots; i++) { setTimeout(() => { if (gameRunning) bullets.push(new HeavyBullet(this.x + this.width / 2 - (15 * scaleFactor), this.y)); }, i * 120); }
-        } else { if (now - playerLastShotTime < baseCooldown) return; playSound(audioAssets.playerShoot, 0.7); let shotsPerBurst = 1 + burstFireLevel; const fire = (xOffset) => { for (let i = 0; i < shotsPerBurst; i++) { setTimeout(() => { if (gameRunning) bullets.push(new Bullet(this.x + xOffset, this.y)); }, i * 100); } }; if (wingCannonsActive) { fire(this.width * 0.2); fire(this.width * 0.8 - (10 * scaleFactor)); } else { fire(this.width / 2 - (5 * scaleFactor)); }
-        } playerLastShotTime = now;
-    }}
-    class Bullet { constructor(x, y) { this.image = assets.bullet; this.x = x; this.y = y; this.width = 10 * scaleFactor; this.height = 30 * scaleFactor; this.speed = 12 * scaleFactor; this.damage = 1; } draw() { if (this.image) ctx.drawImage(this.image, this.x, this.y, this.width, this.height); } update() { this.y -= this.speed; } }
+    class Player { constructor() { this.image = assets.player; this.width = GAME_CONFIG.player.width * scaleFactor; this.height = GAME_CONFIG.player.height * scaleFactor; this.x = canvas.width / 2 - this.width / 2; this.y = canvas.height + this.height; this.speed = GAME_CONFIG.player.speed * scaleFactor; this.isPositioned = false; } draw() { if (this.image) { if (isInvulnerable) { ctx.globalAlpha = (Math.floor(Date.now() / 100) % 2 === 0) ? 0.5 : 1; } ctx.drawImage(this.image, this.x, this.y, this.width, this.height); ctx.globalAlpha = 1; } } update() { if (!this.isPositioned) { const targetY = canvas.height - 150 * scaleFactor; if (this.y > targetY) { this.y -= 2 * scaleFactor; } else { this.y = targetY; this.isPositioned = true; } return; } let moveX = 0; let moveY = 0; if (keys['arrowleft'] || keys['a']) moveX -= 1; if (keys['arrowright'] || keys['d']) moveX += 1; if (keys['arrowup'] || keys['w']) moveY -= 1; if (keys['arrowdown'] || keys['s']) moveY += 1; const gamepad = navigator.getGamepads()[0]; if (gamepad) { const stickX = gamepad.axes[0]; const stickY = gamepad.axes[1]; const deadzone = 0.2; if (Math.abs(stickX) > deadzone) moveX = stickX; if (Math.abs(stickY) > deadzone) moveY = stickY; if (gamepad.buttons[14] && gamepad.buttons[14].pressed) moveX = -1; if (gamepad.buttons[15] && gamepad.buttons[15].pressed) moveX = 1; if (gamepad.buttons[12] && gamepad.buttons[12].pressed) moveY = -1; if (gamepad.buttons[13] && gamepad.buttons[13].pressed) moveY = 1; if (gamepad.buttons[0].pressed) { this.shoot(); } if (gamepad.buttons[7] && gamepad.buttons[7].wasPressed) { launchMissile(); } } if (touchMoveX) moveX = touchMoveX; if (touchMoveY) moveY = touchMoveY; if (moveX !== 0) this.x += this.speed * moveX; if (moveY !== 0) this.y += this.speed * moveY; if (this.x < 0) this.x = 0; if (this.x > canvas.width - this.width) this.x = canvas.width - this.width; if (this.y < 0) this.y = 0; if (this.y > canvas.height - this.height) this.y = canvas.height - this.height; } shoot() {
+    const now = Date.now();
+    let baseCooldown = DIFFICULTY_SETTINGS[difficultyLevel].shootCooldown;
+    if (slowShotStacks > 0) {
+        baseCooldown *= (1 + (0.5 * slowShotStacks));
+    }
+
+    if (laserLevel > 0) {
+        const cooldown = laserLevel > 1 ? GAME_CONFIG.powerups.laserShootCooldown / 2 : GAME_CONFIG.powerups.laserShootCooldown;
+        if (now - playerLastShotTime < cooldown) return;
+        playSound(audioAssets.laserShoot, 0.8);
+        laserBeams.push(new LaserBeam(this.x + this.width / 2, this.y));
+
+    } else if (heavyCannonLevel > 0) {
+        if (now - playerLastShotTime < baseCooldown * 1.5) return;
+        playSound(audioAssets.heavyShoot, 0.8);
+        const shots = heavyCannonLevel;
+        for (let i = 0; i < shots; i++) {
+            setTimeout(() => {
+                if (gameRunning) bullets.push(new HeavyBullet(this.x + this.width / 2 - (15 * scaleFactor), this.y));
+            }, i * 120);
+        }
+    } else {
+        if (now - playerLastShotTime < baseCooldown) return;
+        playSound(audioAssets.playerShoot, 0.7);
+        let shotsPerBurst = 1 + burstFireLevel;
+
+        for (let i = 0; i < shotsPerBurst; i++) {
+            setTimeout(() => {
+                if (gameRunning) {
+                    // Disparo normal si no hay cañones de ala
+                    if (wingCannonsLevel === 0) {
+                        bullets.push(new Bullet(this.x + this.width / 2 - (5 * scaleFactor), this.y));
+                    }
+                    
+                    // Nivel 1 de Wing Cannons: Disparos rectos
+                    if (wingCannonsLevel >= 1) {
+                        bullets.push(new Bullet(this.x + this.width * 0.2, this.y));
+                        bullets.push(new Bullet(this.x + this.width * 0.8 - (10 * scaleFactor), this.y));
+                    }
+
+                    // Nivel 2 de Wing Cannons: Disparos adicionales en ángulo
+                    if (wingCannonsLevel >= 2) {
+                        const angleSpread = 0.2; // Aprox. 11.5 grados
+                        bullets.push(new Bullet(this.x + this.width * 0.2, this.y, -Math.PI / 2 - angleSpread));
+                        bullets.push(new Bullet(this.x + this.width * 0.8 - (10 * scaleFactor), this.y, -Math.PI / 2 + angleSpread));
+                    }
+                }
+            }, i * 100);
+        }
+    }
+    playerLastShotTime = now;
+}}
+    class ShieldVisual {
+    constructor(player, image) {
+        this.player = player;
+        this.image = image;
+        this.size = 140 * scaleFactor;
+        this.targetSize = 100 * scaleFactor;
+        this.alpha = 0;
+        this.rotation = Math.random() * Math.PI * 2; // Ángulo inicial aleatorio
+        this.state = 'appearing'; // 'appearing', 'idle', 'disappearing'
+    }
+
+    update() {
+        // Rotación contraria a los drones
+        this.rotation -= GAME_CONFIG.drones.rotationSpeed * 0.5;
+
+        if (this.state === 'appearing') {
+            this.alpha += 0.05;
+            this.size -= (this.size - this.targetSize) * 0.1;
+            if (this.alpha >= 1) {
+                this.alpha = 1;
+                this.size = this.targetSize;
+                this.state = 'idle';
+            }
+        } else if (this.state === 'disappearing') {
+            this.alpha -= 0.05;
+            this.size += ( (140 * scaleFactor) - this.size) * 0.1;
+            if (this.alpha <= 0) {
+                this.alpha = 0;
+            }
+        }
+        
+        this.x = this.player.x + (this.player.width / 2);
+        this.y = this.player.y + (this.player.height / 2);
+    }
+
+    draw(ctx) {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.drawImage(this.image, -this.size / 2, -this.size / 2, this.size, this.size);
+        ctx.restore();
+    }
+}
+    class Bullet { constructor(x, y, angle = -Math.PI / 2) { this.image = assets.bullet; this.x = x; this.y = y; this.width = 10 * scaleFactor; this.height = 30 * scaleFactor; this.speed = 12 * scaleFactor; this.damage = 1; this.speedX = Math.cos(angle) * this.speed; this.speedY = Math.sin(angle) * this.speed; } draw() { if (this.image) ctx.drawImage(this.image, this.x, this.y, this.width, this.height); } update() { this.x += this.speedX; this.y += this.speedY; } }
     class LaserBeam { constructor(x, y) { this.image = assets.laser; this.x = x - (20 * scaleFactor / 2); this.y = y - canvas.height; this.width = 20 * scaleFactor; this.height = canvas.height; this.damage = 15; this.life = 60; this.collidedEnemies = new Set(); this.originY = y; } draw() { if (this.image) { ctx.globalAlpha = this.life / 60; ctx.drawImage(this.image, this.x, this.y, this.width, this.height); ctx.globalAlpha = 1; } } update() { this.life--; } }
     class AsteroidShot {
         constructor(x, y, angle) {
@@ -346,14 +443,27 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor(type) {
             this.type = type;
             // CAMBIO 8: Lógica de Variedad de Sprites
-            const variantSet = isPostSuperBoss4 ? ['d', 'e', 'f'] : ['a', 'b', 'c'];
-            const variant = variantSet[Math.floor(Math.random() * 3)];
-            this.image = assets[`asteroid${type}_${variant}`] || assets[`asteroid${type}_a`]; // Fallback
+            let stageVariants;
+// Etapa 3: Después del 3er Súper Jefe
+if (bossesDestroyed >= bossProgression.length + 3) {
+    stageVariants = ['e', 'f'];
+}
+// Etapa 2: Durante los 3 primeros Súper Jefes
+else if (bossesDestroyed >= bossProgression.length) {
+    stageVariants = ['c', 'd'];
+}
+// Etapa 1: Jefes normales
+else {
+    stageVariants = ['a', 'b'];
+}
+const variant = stageVariants[Math.floor(Math.random() * stageVariants.length)];
+this.image = assets[`asteroid${type}_${variant}`] || assets[`asteroid${type}_a`];
 
             if (this.type === 1) { this.width = 150 * scaleFactor; this.height = 150 * scaleFactor; this.health = 3; } 
             else if (this.type === 2) { this.width = 280 * scaleFactor; this.height = 280 * scaleFactor; this.health = 12; } // CAMBIO 7: Vida aumentada
             else if (this.type === 3) { this.width = 80 * scaleFactor; this.height = 80 * scaleFactor; this.health = 2; } 
             else if (this.type === 4) { this.width = 400 * scaleFactor; this.height = 400 * scaleFactor; this.health = 30; }
+            else if (this.type === 5) { this.width = 80 * scaleFactor; this.height = 80 * scaleFactor; this.health = 2; }
             this.maxHealth = this.health;
             this.x = Math.random() * canvas.width; this.y = 0 - this.height; this.speedX = (Math.random() - 0.5) * 1 * scaleFactor; this.speedY = (Math.random() * 1.5 + 0.5) * scaleFactor; this.angle = 0; this.rotationSpeed = (Math.random() - 0.5) * 0.005;
         }
@@ -410,12 +520,53 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Lógica del Juego y Funciones Principales ---
     function resetPlayerStats(fullReset = false) {
-        const diff = DIFFICULTY_SETTINGS[difficultyLevel];
-        if(fullReset) { score = 0; enemyDestroyedCount = 0; bossesDestroyed = 0; enemiesSinceDamage = 0; playerLives = diff.initialLives; }
-        playerHealth = diff.initialHealth; isInvulnerable = false; burstFireLevel = 0; wingCannonsActive = false; heavyCannonLevel = 0; laserActive = false; missileSystemActive = false; missileCharges = 0; slowShotStacks = 0; drones = []; powerUpSpawnChance = diff.powerUpChance; smartBombOnCooldown = false;
-        clearTimeout(heavyCannonTimeout); clearTimeout(laserTimeout); clearTimeout(slowShotTimeout); clearInterval(missileChargeInterval);
+    const diff = DIFFICULTY_SETTINGS[difficultyLevel];
+    if (fullReset) {
+        score = 0;
+        enemyDestroyedCount = 0;
+        bossesDestroyed = 0;
+        enemiesSinceDamage = 0;
+        playerLives = diff.initialLives;
     }
+    
+    // --- ESTADO DEL JUGADOR ---
+    playerHealth = diff.initialHealth;
+    isInvulnerable = false;
+    isGodMode = false; // <-- AÑADIDO: Reinicia el modo dios
+    
+    // --- POWER-UPS Y ARMAS ---
+    burstFireLevel = 0;
+    wingCannonsLevel = 0;
+    heavyCannonLevel = 0;
+    laserLevel = 0;
+    missileSystemActive = false; // <-- CORREGIDO: Línea duplicada y con typos eliminada
+    missileCharges = 0;
+    slowShotStacks = 0;
+    
+    // --- OBJETOS DEL JUGADOR ---
+    drones = [];
+    shieldStacks = 0;         // <-- AÑADIDO: Reinicia el contador de escudos
+    shieldVisuals = [];       // <-- AÑADIDO: Limpia el array de escudos visuales
+    
+    // --- ESTADO DEL JUEGO ---
+    powerUpSpawnChance = diff.powerUpChance;
+    smartBombOnCooldown = false;
 
+    // Limpia todos los temporizadores y intervalos de power-ups
+    clearTimeout(heavyCannonTimeout);
+    clearTimeout(laserTimeout);
+    clearTimeout(slowShotTimeout);
+    clearInterval(missileChargeInterval);
+}
+function redistributeDroneAngles() {
+    const count = drones.length;
+    if (count === 0) return;
+    
+    drones.forEach((drone, index) => {
+        // Distribuye los drones equitativamente en un círculo
+        drone.angle = (index / count) * (Math.PI * 2);
+    });
+}
     function initGame(startProgressionIndex = 0) {
         resizeCanvas();
         scoreAndStatsDisabled = cheatModeActive || applyAllPowerupsCheat;
@@ -451,7 +602,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function spawnWave(count) { for (let i = 0; i < count; i++) { const randomType = Math.floor(Math.random() * 10) + 1; setTimeout(() => { if (gameRunning) enemies.push(new Enemy(randomType)); }, i * 300); } }
-    function handleGameStateChange(arg) { switch (gameState) { case 'METEOR_SHOWER': playMusic(audioAssets.bossMusic); clearInterval(asteroidInterval); allowSpawning = false; enemies.forEach(e => e.retreating = true); aggressiveAsteroidSpawner = setInterval(() => { if (gameRunning && !isPaused) asteroids.push(new Asteroid(Math.ceil(Math.random() * 4))); }, 700); meteorShowerTimer = setTimeout(() => { gameState = 'BOSS_FIGHT'; handleGameStateChange(); }, 10000); break; case 'BOSS_FIGHT': clearInterval(aggressiveAsteroidSpawner); let bossType; if (currentBossIndex < bossProgression.length) { bossType = bossProgression[currentBossIndex]; } else { const superIndex = currentBossIndex - bossProgression.length; bossType = superBossProgression[superIndex]; } bosses.push(new Boss(bossType)); break; case 'NORMAL_WAVE': playMusic(audioAssets.backgroundMusic); allowSpawning = true; const chargeCycleDuration = (currentBossIndex >= bossProgression.length) ? GAME_CONFIG.gameplay.superBossChargeCycleDuration : GAME_CONFIG.gameplay.chargeCycleDuration; bossTimer = setInterval(() => { gameState = 'METEOR_SHOWER'; handleGameStateChange(); clearInterval(bossTimer); }, chargeCycleDuration); asteroidInterval = setInterval(() => { if (gameRunning && !isPaused && asteroids.length < 5) { const rand = Math.random(); let type = 1; if (rand < 0.60) type = 1; else if (rand < 0.85) type = 2; else if (rand < 0.95) type = 3; else type = 4; asteroids.push(new Asteroid(type)); } }, 8000); const startingEnemies = typeof arg === 'number' ? arg : DIFFICULTY_SETTINGS[difficultyLevel].enemies; spawnWave(startingEnemies); break; } }
+    function handleGameStateChange(arg) { switch (gameState) { case 'METEOR_SHOWER': playMusic(audioAssets.bossMusic); clearInterval(asteroidInterval); allowSpawning = false; enemies.forEach(e => e.retreating = true); aggressiveAsteroidSpawner = setInterval(() => { if (gameRunning && !isPaused) asteroids.push(new Asteroid(Math.ceil(Math.random() * 5))); }, 700); meteorShowerTimer = setTimeout(() => { gameState = 'BOSS_FIGHT'; handleGameStateChange(); }, 10000); break; case 'BOSS_FIGHT': clearInterval(aggressiveAsteroidSpawner); let bossType; if (currentBossIndex < bossProgression.length) { bossType = bossProgression[currentBossIndex]; } else { const superIndex = currentBossIndex - bossProgression.length; bossType = superBossProgression[superIndex]; } bosses.push(new Boss(bossType)); break; case 'NORMAL_WAVE': playMusic(audioAssets.backgroundMusic); allowSpawning = true; const chargeCycleDuration = (currentBossIndex >= bossProgression.length) ? GAME_CONFIG.gameplay.superBossChargeCycleDuration : GAME_CONFIG.gameplay.chargeCycleDuration; bossTimer = setInterval(() => { gameState = 'METEOR_SHOWER'; handleGameStateChange(); clearInterval(bossTimer); }, chargeCycleDuration); asteroidInterval = setInterval(() => { if (gameRunning && !isPaused && asteroids.length < 5) { const rand = Math.random();
+let type = 1;
+if (rand < 0.55) type = 1;         // 55% de probabilidad (Común)
+else if (rand < 0.80) type = 2;    // 25% de probabilidad (Mediano)
+else if (rand < 0.72) type = 3;    // 8% de probabilidad (Rápido)
+else if (rand < 0.95) type = 5;    // 7% de probabilidad (Nuevo Rápido)
+else type = 4;                     // 5% de probabilidad (Gigante)
+asteroids.push(new Asteroid(type)); } }, 8000); const startingEnemies = typeof arg === 'number' ? arg : DIFFICULTY_SETTINGS[difficultyLevel].enemies; spawnWave(startingEnemies); break; } }
     // Reemplaza la función findNearestTarget por completo
 function findNearestTarget(fromX, fromY, targetTypes = ['enemies', 'bosses', 'asteroids']) {
     let primaryTargets = [];
@@ -544,6 +702,10 @@ function triggerComboIndicator(x, y, tier) {
     function damagePlayer(amount = 1) { if (isInvulnerable) return;
  if (shieldStacks > 0) {
         shieldStacks--;
+       if (shieldVisuals.length > 0) {
+            const lastShield = shieldVisuals[shieldVisuals.length - 1];
+            lastShield.state = 'disappearing'; // Inicia la animación de desaparición
+        }
         playSound(audioAssets.playerDamaged); // Un sonido para indicar que el escudo fue golpeado
         triggerDamageVignette();
         return;
@@ -690,35 +852,106 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
         }
     }
     function applyPowerUp(type) {
-        const diff = DIFFICULTY_SETTINGS[difficultyLevel];
-        switch(type) {
-            case 'health': playSound(audioAssets.powerupShield); playerHealth = Math.min(diff.maxHealth, playerHealth + 1); break;
-            case 'rapidFire': playSound(audioAssets.powerupBurst); burstFireLevel = Math.min(2, burstFireLevel + 1); break;
-            case 'extraLife': playSound(audioAssets.powerupExtraLife); if (playerLives < diff.maxLives) { playerLives++; } break;
-            case 'wingCannons': playSound(audioAssets.powerupWings); wingCannonsActive = true; break;
-            case 'heavyCannon': playSound(audioAssets.powerupHeavy); heavyCannonLevel = Math.min(3, heavyCannonLevel + 1); laserActive = false; clearTimeout(heavyCannonTimeout); clearTimeout(laserTimeout); heavyCannonTimeout = setTimeout(() => { heavyCannonLevel = 0; }, 15000); break;
-            case 'laser': playSound(audioAssets.powerupHeavy); laserActive = true; heavyCannonLevel = 0; clearTimeout(heavyCannonTimeout); clearTimeout(laserTimeout); laserTimeout = setTimeout(() => { laserActive = false; }, GAME_CONFIG.powerups.laserDuration); break;
-            case 'missileSystem': playSound(audioAssets.powerupMissile); if (!missileSystemActive) { missileSystemActive = true; missileChargeInterval = setInterval(() => { if (gameRunning && !isPaused && missileCharges < GAME_CONFIG.missiles.maxCharges) { missileCharges++; } }, GAME_CONFIG.missiles.chargeTime); } if (missileCharges < GAME_CONFIG.missiles.maxCharges) missileCharges++; break;
-            case 'smartBomb': playSound(audioAssets.bombExplode); enemies.forEach(e => { explosions.push(new Explosion(e.x, e.y, e.width)); addScore(e.health); }); enemies = []; triggerScreenFlash(); spawnWave(4); break;
-            case 'drone': playSound(audioAssets.powerupDrone); if(drones.length < diff.maxDrones) { const angleOffset = drones.length > 0 ? drones[0].angle + Math.PI : 0; drones.push(new Drone(player, angleOffset)); } break;
-            case 'shield': // <-- AÑADE ESTE NUEVO CASO
-            playSound(audioAssets.powerupShield); // Reusa un sonido o añade uno nuevo
+    const diff = DIFFICULTY_SETTINGS[difficultyLevel];
+    switch (type) {
+        case 'shield':
+            playSound(audioAssets.powerupShield);
             if (shieldStacks < 3) {
                 shieldStacks++;
+                const shieldImage = assets[`shieldEffect${shieldStacks}`];
+                if (shieldImage) {
+                    shieldVisuals.push(new ShieldVisual(player, shieldImage));
+                }
             } else if (shieldStacks === 3) {
-                shieldStacks = 4;
-                isGodMode = true;
-                isInvulnerable = true; // Invulnerabilidad base
-                setTimeout(() => {
-                    isGodMode = false;
-                    isInvulnerable = false;
-                    shieldStacks = 3;
-                }, 8000); // 8 segundos
+                // Si ya tiene 3, el próximo activa God Mode (si decides implementar esa lógica)
+                // Por ahora, simplemente no hacemos nada para evitar más de 3.
+                // O podrías añadir la lógica de God Mode aquí.
             }
             break;
-            case 'slowShot': playSound(audioAssets.powerdownSound); slowShotStacks = Math.min(4, slowShotStacks + 1); clearTimeout(slowShotTimeout); slowShotTimeout = setTimeout(() => { slowShotStacks = 0; }, GAME_CONFIG.powerups.slowShotDuration); break; // CAMBIO 4: Aumentar acumulaciones
-        }
+        case 'health':
+            playSound(audioAssets.powerupShield);
+            playerHealth = Math.min(diff.maxHealth, playerHealth + 1);
+            break;
+        case 'rapidFire':
+            playSound(audioAssets.powerupBurst);
+            clearTimeout(rapidFireTimeout);
+            burstFireLevel = Math.min(3, burstFireLevel + 1);
+            if (burstFireLevel === 3) {
+                rapidFireTimeout = setTimeout(() => {
+                    burstFireLevel = 2;
+                }, 8000);
+            }
+            break;
+        case 'extraLife':
+            playSound(audioAssets.powerupExtraLife);
+            if (playerLives < diff.maxLives) {
+                playerLives++;
+            }
+            break;
+        case 'wingCannons':
+            playSound(audioAssets.powerupWings);
+            wingCannonsLevel = Math.min(2, wingCannonsLevel + 1);
+            break;
+        case 'heavyCannon':
+            playSound(audioAssets.powerupHeavy);
+            heavyCannonLevel = Math.min(3, heavyCannonLevel + 1);
+            laserLevel = 0;
+            clearTimeout(heavyCannonTimeout);
+            clearTimeout(laserTimeout);
+            heavyCannonTimeout = setTimeout(() => {
+                heavyCannonLevel = 0;
+            }, 15000);
+            break;
+        case 'laser':
+            playSound(audioAssets.powerupHeavy);
+            laserLevel = Math.min(2, laserLevel + 1);
+            heavyCannonLevel = 0;
+            clearTimeout(heavyCannonTimeout);
+            clearTimeout(laserTimeout);
+            laserTimeout = setTimeout(() => {
+                laserLevel = 0;
+            }, GAME_CONFIG.powerups.laserDuration);
+            break;
+        case 'missileSystem':
+            playSound(audioAssets.powerupMissile);
+            if (!missileSystemActive) {
+                missileSystemActive = true;
+                missileChargeInterval = setInterval(() => {
+                    if (gameRunning && !isPaused && missileCharges < GAME_CONFIG.missiles.maxCharges) {
+                        missileCharges++;
+                    }
+                }, GAME_CONFIG.missiles.chargeTime);
+            }
+            if (missileCharges < GAME_CONFIG.missiles.maxCharges) missileCharges++;
+            break;
+        case 'smartBomb':
+            playSound(audioAssets.bombExplode);
+            enemies.forEach(e => {
+                explosions.push(new Explosion(e.x, e.y, e.width));
+                addScore(e.health);
+            });
+            enemies = [];
+            triggerScreenFlash();
+            spawnWave(4);
+            break;
+        case 'drone':
+            playSound(audioAssets.powerupDrone);
+            if (drones.length < diff.maxDrones) {
+                drones.push(new Drone(player, 0));
+                redistributeDroneAngles();
+            }
+            break;
+        // <-- ELIMINADO: El segundo 'case "shield"' que estaba aquí fue removido
+        case 'slowShot':
+            playSound(audioAssets.powerdown); // Corregido el nombre del audio a uno que existe
+            slowShotStacks = Math.min(4, slowShotStacks + 1);
+            clearTimeout(slowShotTimeout);
+            slowShotTimeout = setTimeout(() => {
+                slowShotStacks = 0;
+            }, GAME_CONFIG.powerups.slowShotDuration);
+            break;
     }
+}
 
    function gameLoop() {
     if (!gameRunning || gameState === 'ENDING' || gameState === 'POST_ENDING') { 
@@ -726,8 +959,6 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
         return; 
     }
     if (isPaused) { 
-        // No dibujes nada más si está en pausa, el menú se encarga de todo.
-        // La animación continúa para que el menú no se congele.
         requestAnimationFrame(gameLoop); 
         return; 
     }
@@ -763,7 +994,7 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
 
     // --- 3. ACTUALIZACIÓN DE ENTIDADES ---
     stars.forEach(s => s.update(playerSpeedX, playerSpeedY));
-    if (gameState !== 'INTERMISSION') { player.update(); }
+    player.update(); 
     bullets.forEach((b, i) => { b.update(); if (b.y + b.height < 0 || b.y > canvas.height) bullets.splice(i, 1); });
     laserBeams.forEach((l, i) => { l.update(); if (l.life <= 0) laserBeams.splice(i, 1); });
     asteroidShots.forEach((as, i) => { as.update(); if (as.y + as.height < 0 || as.y > canvas.height || as.x + as.width < 0 || as.x > canvas.width) asteroidShots.splice(i, 1); });
@@ -783,6 +1014,10 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
         }
     });
 
+    // <-- CAMBIO: LÓGICA DEL ESCUDO MOVIDA AQUÍ AFUERA -->
+    shieldVisuals.forEach(sv => sv.update());
+    shieldVisuals = shieldVisuals.filter(sv => sv.alpha > 0 || sv.state !== 'disappearing');
+    
     if (gameState !== 'INTERMISSION') handleCollisions();
 
     // --- 4. DIBUJADO DE ENTIDADES ---
@@ -796,6 +1031,7 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
     bosses.forEach(b => b.draw()); 
     powerUps.forEach(p => p.draw()); 
     player.draw(); 
+    shieldVisuals.forEach(sv => sv.draw(ctx)); // El dibujado ya estaba en el lugar correcto
     drones.forEach(d => d.draw()); 
     explosions.forEach(ex => ex.draw()); 
     smallExplosions.forEach(ex => ex.draw()); 
@@ -803,6 +1039,7 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
     floatingIndicators.forEach(ind => ind.draw());
     
     // --- 5. DIBUJADO DE UI ---
+    // (El resto de la función de dibujado de UI no necesita cambios)
     const fontSize = 24 * scaleFactor; 
     ctx.fillStyle = 'white'; 
     ctx.font = `${fontSize}px Arial`; 
@@ -815,15 +1052,6 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
     if (assets.lifeIcon) { for (let i = 0; i < playerLives; i++) { ctx.drawImage(assets.lifeIcon, canvas.width - (iconSize + iconGap) * (i + 1), 20 * scaleFactor, iconSize, iconSize); } }
     if (assets.healthIcon) { for (let i = 0; i < playerHealth; i++) { ctx.drawImage(assets.healthIcon, canvas.width - (iconSize + iconGap) * (i + 1), 20 * scaleFactor + iconSize + iconGap, iconSize, iconSize); } }
     
-    // <-- EL CÓDIGO DEL ESCUDO SE MUEVE AQUÍ, AL LUGAR CORRECTO
-    if (shieldStacks > 0) {
-        ctx.fillStyle = isGodMode ? '#FFD700' : '#00BFFF';
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.textAlign = 'right';
-        const shieldText = isGodMode ? '¡INMUNE!' : `Escudo: ${shieldStacks}`;
-        ctx.fillText(shieldText, canvas.width - 20 * scaleFactor, 180 * scaleFactor);
-    }
-
     if (currentComboTier > 0) {
         const tierMap = { 1: '1_5x', 2: '2x', 3: '3x', 4: '4x', 5: '5x' };
         const hudImageName = `combo_hud_${tierMap[currentComboTier]}`;
