@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } playerLastShotTime = now;
     }}
     class Bullet { constructor(x, y) { this.image = assets.bullet; this.x = x; this.y = y; this.width = 10 * scaleFactor; this.height = 30 * scaleFactor; this.speed = 12 * scaleFactor; this.damage = 1; } draw() { if (this.image) ctx.drawImage(this.image, this.x, this.y, this.width, this.height); } update() { this.y -= this.speed; } }
-    class LaserBeam { constructor(x, y) { this.image = assets.laser; this.x = x - (20 * scaleFactor / 2); this.y = y - canvas.height; this.width = 20 * scaleFactor; this.height = canvas.height; this.damage = 15; this.life = 60; this.collidedEnemies = new Set(); } draw() { if (this.image) { ctx.globalAlpha = this.life / 60; ctx.drawImage(this.image, this.x, this.y, this.width, this.height); ctx.globalAlpha = 1; } } update() { this.life--; } }
+    class LaserBeam { constructor(x, y) { this.image = assets.laser; this.x = x - (20 * scaleFactor / 2); this.y = y - canvas.height; this.width = 20 * scaleFactor; this.height = canvas.height; this.damage = 15; this.life = 60; this.collidedEnemies = new Set(); this.originY = y; } draw() { if (this.image) { ctx.globalAlpha = this.life / 60; ctx.drawImage(this.image, this.x, this.y, this.width, this.height); ctx.globalAlpha = 1; } } update() { this.life--; } }
     class AsteroidShot {
         constructor(x, y, angle) {
             // CAMBIO 8: Lógica de Variedad de Sprites
@@ -448,11 +448,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function spawnWave(count) { for (let i = 0; i < count; i++) { const randomType = Math.floor(Math.random() * 10) + 1; setTimeout(() => { if (gameRunning) enemies.push(new Enemy(randomType)); }, i * 300); } }
-    function handleGameStateChange(arg) { switch (gameState) { case 'METEOR_SHOWER': playMusic(audioAssets.bossMusic); clearInterval(asteroidInterval); allowSpawning = false; enemies.forEach(e => e.retreating = true); aggressiveAsteroidSpawner = setInterval(() => { if (gameRunning && !isPaused) asteroids.push(new Asteroid(Math.ceil(Math.random() * 4))); }, 400); meteorShowerTimer = setTimeout(() => { gameState = 'BOSS_FIGHT'; handleGameStateChange(); }, 10000); break; case 'BOSS_FIGHT': clearInterval(aggressiveAsteroidSpawner); let bossType; if (currentBossIndex < bossProgression.length) { bossType = bossProgression[currentBossIndex]; } else { const superIndex = currentBossIndex - bossProgression.length; bossType = superBossProgression[superIndex]; } bosses.push(new Boss(bossType)); break; case 'NORMAL_WAVE': playMusic(audioAssets.backgroundMusic); allowSpawning = true; const chargeCycleDuration = (currentBossIndex >= bossProgression.length) ? GAME_CONFIG.gameplay.superBossChargeCycleDuration : GAME_CONFIG.gameplay.chargeCycleDuration; bossTimer = setInterval(() => { gameState = 'METEOR_SHOWER'; handleGameStateChange(); clearInterval(bossTimer); }, chargeCycleDuration); asteroidInterval = setInterval(() => { if (gameRunning && !isPaused && asteroids.length < 5) { const rand = Math.random(); let type = 1; if (rand < 0.60) type = 1; else if (rand < 0.85) type = 2; else if (rand < 0.95) type = 3; else type = 4; asteroids.push(new Asteroid(type)); } }, 8000); const startingEnemies = typeof arg === 'number' ? arg : DIFFICULTY_SETTINGS[difficultyLevel].enemies; spawnWave(startingEnemies); break; } }
-    function findNearestTarget(fromX, fromY, targetTypes = ['enemies', 'bosses', 'asteroids']) {
-        let allTargets = []; if (targetTypes.includes('enemies')) allTargets.push(...enemies); if (targetTypes.includes('bosses')) allTargets.push(...bosses); if (targetTypes.includes('asteroids')) allTargets.push(...asteroids); if (allTargets.length === 0) return null; let nearestTarget = null; let minDistanceSq = Infinity;
-        allTargets.forEach(target => { if (target.health <= 0) return; const dx = target.x - fromX; const dy = target.y - fromY; const distanceSq = dx * dx + dy * dy; if (distanceSq < minDistanceSq) { minDistanceSq = distanceSq; nearestTarget = target; } }); return nearestTarget;
+    function handleGameStateChange(arg) { switch (gameState) { case 'METEOR_SHOWER': playMusic(audioAssets.bossMusic); clearInterval(asteroidInterval); allowSpawning = false; enemies.forEach(e => e.retreating = true); aggressiveAsteroidSpawner = setInterval(() => { if (gameRunning && !isPaused) asteroids.push(new Asteroid(Math.ceil(Math.random() * 4))); }, 700); meteorShowerTimer = setTimeout(() => { gameState = 'BOSS_FIGHT'; handleGameStateChange(); }, 10000); break; case 'BOSS_FIGHT': clearInterval(aggressiveAsteroidSpawner); let bossType; if (currentBossIndex < bossProgression.length) { bossType = bossProgression[currentBossIndex]; } else { const superIndex = currentBossIndex - bossProgression.length; bossType = superBossProgression[superIndex]; } bosses.push(new Boss(bossType)); break; case 'NORMAL_WAVE': playMusic(audioAssets.backgroundMusic); allowSpawning = true; const chargeCycleDuration = (currentBossIndex >= bossProgression.length) ? GAME_CONFIG.gameplay.superBossChargeCycleDuration : GAME_CONFIG.gameplay.chargeCycleDuration; bossTimer = setInterval(() => { gameState = 'METEOR_SHOWER'; handleGameStateChange(); clearInterval(bossTimer); }, chargeCycleDuration); asteroidInterval = setInterval(() => { if (gameRunning && !isPaused && asteroids.length < 5) { const rand = Math.random(); let type = 1; if (rand < 0.60) type = 1; else if (rand < 0.85) type = 2; else if (rand < 0.95) type = 3; else type = 4; asteroids.push(new Asteroid(type)); } }, 8000); const startingEnemies = typeof arg === 'number' ? arg : DIFFICULTY_SETTINGS[difficultyLevel].enemies; spawnWave(startingEnemies); break; } }
+    // Reemplaza la función findNearestTarget por completo
+function findNearestTarget(fromX, fromY, targetTypes = ['enemies', 'bosses', 'asteroids']) {
+    let primaryTargets = [];
+    if (targetTypes.includes('enemies')) primaryTargets.push(...enemies);
+    if (targetTypes.includes('bosses')) primaryTargets.push(...bosses);
+
+    let nearestTarget = null;
+    let minDistanceSq = Infinity;
+
+    // 1. Buscar enemigos y jefes visibles primero
+    primaryTargets.forEach(target => {
+        if (target.health <= 0 || target.y > canvas.height || target.y + target.height < 0) return; // Ignorar si está muerto o fuera de pantalla
+        const dx = target.x - fromX;
+        const dy = target.y - fromY;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq < minDistanceSq) {
+            minDistanceSq = distanceSq;
+            nearestTarget = target;
+        }
+    });
+
+    // 2. Si se encontró un enemigo o jefe, devolverlo
+    if (nearestTarget) {
+        return nearestTarget;
     }
+
+    // 3. Si no, y si se permite, buscar asteroides visibles
+    if (targetTypes.includes('asteroids')) {
+        let secondaryTargets = [...asteroids];
+        secondaryTargets.forEach(target => {
+            if (target.health <= 0 || target.y > canvas.height || target.y + target.height < 0) return; // Ignorar si está muerto o fuera de pantalla
+            const dx = target.x - fromX;
+            const dy = target.y - fromY;
+            const distanceSq = dx * dx + dy * dy;
+            if (distanceSq < minDistanceSq) {
+                minDistanceSq = distanceSq;
+                nearestTarget = target;
+            }
+        });
+    }
+
+    return nearestTarget;
+}
     function getComboTier(killCount) {
     if (killCount >= 55) return 5;
     if (killCount >= 45) return 4;
@@ -525,8 +564,8 @@ function triggerComboIndicator(x, y, tier) {
         let targets = [...bosses, ...enemies, ...asteroids];
         laserBeams.forEach(laser => {
             targets.forEach(target => {
-                if (target instanceof Boss && !target.isVulnerable) return; // CAMBIO 10: Chequeo de vulnerabilidad
-                if (target.health > 0 && !laser.collidedEnemies.has(target)) { if (laser.x < target.x + target.width && laser.x + laser.width > target.x) { target.health -= laser.damage; laser.collidedEnemies.add(target); playSound(audioAssets.hit); smallExplosions.push(new SmallExplosion(target.x + target.width / 2, Math.max(target.y, 0))); if (target.health <= 0) { handleTargetDestroyed(target); } } }
+                if (target instanceof Boss && !target.isVulnerable) return; 
+                if (target.health > 0 && !laser.collidedEnemies.has(target)) { if (laser.x < target.x + target.width && laser.x + laser.width > target.x && target.y + target.height < laser.originY) { target.health -= laser.damage; laser.collidedEnemies.add(target); playSound(audioAssets.hit); smallExplosions.push(new SmallExplosion(target.x + target.width / 2, Math.max(target.y, 0))); if (target.health <= 0) { handleTargetDestroyed(target); } } }
             });
         });
         for (let asIndex = asteroidShots.length - 1; asIndex >= 0; asIndex--) {
@@ -591,7 +630,15 @@ function triggerComboIndicator(x, y, tier) {
                 powerUps.push(new PowerUp(target.x, target.y, 'smartBomb')); smartBombOnCooldown = true; setTimeout(() => { smartBombOnCooldown = false; }, GAME_CONFIG.powerups.smartBombCooldown);
             } else if (Math.random() < powerUpSpawnChance) { // CAMBIO 2: Lógica de LuckUp eliminada
                 const rand = Math.random(); let type = 'health';
-                if (rand < 0.18) type = 'slowShot'; else if (rand < 0.36) type = 'rapidFire'; else if (rand < 0.48) type = 'health'; else if (rand < 0.58) type = 'extraLife'; else if (rand < 0.68) type = 'wingCannons'; else if (rand < 0.78) type = 'heavyCannon'; else if (rand < 0.88) type = 'drone'; else type = 'laser';
+                if (rand < 0.15) type = 'slowShot';       // 15%
+    else if (rand < 0.30) type = 'rapidFire'; // 15%
+    else if (rand < 0.42) type = 'health';    // 12%
+    else if (rand < 0.52) type = 'extraLife'; // 10%
+    else if (rand < 0.62) type = 'wingCannons';// 10%
+    else if (rand < 0.72) type = 'heavyCannon';// 10%
+    else if (rand < 0.82) type = 'drone';     // 10%
+    else if (rand < 0.92) type = 'missileSystem'; // <-- AÑADIDO (10%)
+    else type = 'laser';                      // 8%
                 powerUps.push(new PowerUp(target.x, target.y, type));
             }
             if (gameState === 'NORMAL_WAVE') { spawnEnemies(); }
@@ -865,4 +912,3 @@ function skipIntroToEnd() {
     function setupTouchControls() { const joystick = document.createElement('div'); joystick.id = 'joystick'; const stick = document.createElement('div'); stick.id = 'stick'; joystick.appendChild(stick); gameContainer.appendChild(joystick); const actionButton = document.createElement('div'); actionButton.id = 'actionButton'; actionButton.className = 'touch-button'; gameContainer.appendChild(actionButton); const missileButton = document.createElement('div'); missileButton.id = 'missileButton'; missileButton.className = 'touch-button'; gameContainer.appendChild(missileButton); let joystickActive = false; let joystickStartX, joystickStartY; joystick.addEventListener('touchstart', (e) => { e.preventDefault(); joystickActive = true; const touch = e.changedTouches[0]; joystickStartX = touch.clientX; joystickStartY = touch.clientY; }, { passive: false }); joystick.addEventListener('touchmove', (e) => { e.preventDefault(); if (!joystickActive) return; const touch = e.changedTouches[0]; const deltaX = touch.clientX - joystickStartX; const deltaY = touch.clientY - joystickStartY; const maxDistance = joystick.offsetWidth / 3; const angle = Math.atan2(deltaY, deltaX); const distance = Math.hypot(deltaX, deltaY); const limitedDistance = Math.min(distance, maxDistance); const stickX = Math.cos(angle) * limitedDistance; const stickY = Math.sin(angle) * limitedDistance; stick.style.transform = `translate(${stickX}px, ${stickY}px)`; touchMoveX = (deltaX / maxDistance); touchMoveY = (deltaY / maxDistance); touchMoveX = Math.max(-1, Math.min(1, touchMoveX)); touchMoveY = Math.max(-1, Math.min(1, touchMoveY)); }, { passive: false }); const resetJoystick = () => { joystickActive = false; stick.style.transform = 'translate(0, 0)'; touchMoveX = 0; touchMoveY = 0; }; joystick.addEventListener('touchend', resetJoystick); joystick.addEventListener('touchcancel', resetJoystick); actionButton.addEventListener('touchstart', (e) => { e.preventDefault(); isShooting = true; }, { passive: false }); actionButton.addEventListener('touchend', () => { isShooting = false; }); missileButton.addEventListener('touchstart', (e) => { e.preventDefault(); launchMissile(); }, { passive: false }); }
     initButton.onclick = initIntro;
 });
-
