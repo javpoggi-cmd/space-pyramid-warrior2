@@ -1304,6 +1304,49 @@ function skipIntroToEnd() {
     window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
     let touchMoveX = 0, touchMoveY = 0, isShooting = false;
     function isTouchDevice() { return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0); }
-    function setupTouchControls() { const joystick = document.createElement('div'); joystick.id = 'joystick'; const stick = document.createElement('div'); stick.id = 'stick'; joystick.appendChild(stick); gameContainer.appendChild(joystick); const actionButton = document.createElement('div'); actionButton.id = 'actionButton'; actionButton.className = 'touch-button'; gameContainer.appendChild(actionButton); const missileButton = document.createElement('div'); missileButton.id = 'missileButton'; missileButton.className = 'touch-button'; gameContainer.appendChild(missileButton); let joystickActive = false; let joystickStartX, joystickStartY; joystick.addEventListener('touchstart', (e) => { e.preventDefault(); joystickActive = true; const touch = e.changedTouches[0]; joystickStartX = touch.clientX; joystickStartY = touch.clientY; }, { passive: false }); joystick.addEventListener('touchmove', (e) => { e.preventDefault(); if (!joystickActive) return; const touch = e.changedTouches[0]; const deltaX = touch.clientX - joystickStartX; const deltaY = touch.clientY - joystickStartY; const maxDistance = joystick.offsetWidth / 3; const angle = Math.atan2(deltaY, deltaX); const distance = Math.hypot(deltaX, deltaY); const limitedDistance = Math.min(distance, maxDistance); const stickX = Math.cos(angle) * limitedDistance; const stickY = Math.sin(angle) * limitedDistance; stick.style.transform = `translate(${stickX}px, ${stickY}px)`; touchMoveX = (deltaX / maxDistance); touchMoveY = (deltaY / maxDistance); touchMoveX = Math.max(-1, Math.min(1, touchMoveX)); touchMoveY = Math.max(-1, Math.min(1, touchMoveY)); }, { passive: false }); const resetJoystick = () => { joystickActive = false; stick.style.transform = 'translate(0, 0)'; touchMoveX = 0; touchMoveY = 0; }; joystick.addEventListener('touchend', resetJoystick); joystick.addEventListener('touchcancel', resetJoystick); actionButton.addEventListener('touchstart', (e) => { e.preventDefault(); isShooting = true; }, { passive: false }); actionButton.addEventListener('touchend', () => { isShooting = false; }); missileButton.addEventListener('touchstart', (e) => { e.preventDefault(); launchMissile(); }, { passive: false }); }
-    initButton.onclick = initIntro;
+    function setupTouchControls() {
+    const joystick = document.createElement('div');
+    joystick.id = 'joystick';
+    const stick = document.createElement('div');
+    stick.id = 'stick';
+    joystick.appendChild(stick);
+    gameContainer.appendChild(joystick);
+
+    const actionButton = document.createElement('div');
+    actionButton.id = 'actionButton';
+    actionButton.className = 'touch-button';
+    gameContainer.appendChild(actionButton);
+
+    const missileButton = document.createElement('div');
+    missileButton.id = 'missileButton';
+    missileButton.className = 'touch-button';
+    gameContainer.appendChild(missileButton);
+
+    // <-- CÓDIGO AÑADIDO PARA EL BOTÓN DE PAUSA MÓVIL -->
+    const mobilePauseButton = document.createElement('div');
+    mobilePauseButton.id = 'mobilePauseButton';
+    mobilePauseButton.innerHTML = 'X'; // La letra X ya está en negrita por el CSS
+    gameContainer.appendChild(mobilePauseButton);
+
+    mobilePauseButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (gameRunning) { // Solo pausar si el juego está en marcha
+            togglePause();
+        }
+    }, { passive: false });
+    // <-- FIN DEL CÓDIGO AÑADIDO -->
+
+    let joystickActive = false;
+    let joystickStartX, joystickStartY;
+    joystick.addEventListener('touchstart', (e) => { e.preventDefault(); joystickActive = true; const touch = e.changedTouches[0]; joystickStartX = touch.clientX; joystickStartY = touch.clientY; }, { passive: false });
+    joystick.addEventListener('touchmove', (e) => { e.preventDefault(); if (!joystickActive) return; const touch = e.changedTouches[0]; const deltaX = touch.clientX - joystickStartX; const deltaY = touch.clientY - joystickStartY; const maxDistance = joystick.offsetWidth / 3; const angle = Math.atan2(deltaY, deltaX); const distance = Math.hypot(deltaX, deltaY); const limitedDistance = Math.min(distance, maxDistance); const stickX = Math.cos(angle) * limitedDistance; const stickY = Math.sin(angle) * limitedDistance; stick.style.transform = `translate(${stickX}px, ${stickY}px)`; touchMoveX = (deltaX / maxDistance); touchMoveY = (deltaY / maxDistance); touchMoveX = Math.max(-1, Math.min(1, touchMoveX)); touchMoveY = Math.max(-1, Math.min(1, touchMoveY)); }, { passive: false });
+    const resetJoystick = () => { joystickActive = false; stick.style.transform = 'translate(0, 0)'; touchMoveX = 0; touchMoveY = 0; };
+    joystick.addEventListener('touchend', resetJoystick);
+    joystick.addEventListener('touchcancel', resetJoystick);
+    actionButton.addEventListener('touchstart', (e) => { e.preventDefault(); isShooting = true; }, { passive: false });
+    actionButton.addEventListener('touchend', () => { isShooting = false; });
+    missileButton.addEventListener('touchstart', (e) => { e.preventDefault(); launchMissile(); }, { passive: false });
+                                                                                                                                                                 }
+        initButton.onclick = initIntro;
 });
+
