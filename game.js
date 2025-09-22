@@ -310,7 +310,7 @@ asteroid5_f: 'img/asteroid5_f.png',
     else if (bossesDestroyed >= 2) targetRgb = colors.darkBlue;
     
     const currentColorRgb = backgroundColor.match(/\d+/g).map(Number);
-    backgroundColor = lerpColor(currentColorRgb, targetRgb, 0.001); // 0.001 es la velocidad de transición
+    backgroundColor = lerpColor(currentColorRgb, targetRgb, 0.003); 
 } 
     function preloadAudio() { console.log("Creando objetos de audio..."); for (const key in audioPaths) { const audio = new Audio(); audio.src = audioPaths[key]; audioAssets[key] = audio; } console.log("Objetos de audio creados."); }
     function playMusic(track) { if (audioAssets.backgroundMusic) audioAssets.backgroundMusic.pause(); if (audioAssets.bossMusic) audioAssets.bossMusic.pause(); if(audioAssets.introMusic) audioAssets.introMusic.pause(); if(audioAssets.endingMusic) audioAssets.endingMusic.pause(); if (isMusicOn && track) { track.currentTime = 0; track.loop = true; track.volume = musicVolume; track.play().catch(e => {}); } }
@@ -440,24 +440,25 @@ asteroid5_f: 'img/asteroid5_f.png',
     class SmallExplosion extends Explosion { constructor(x, y) { super(x, y, 30 * scaleFactor); this.life = 10; } }
     class PowerUp { constructor(x, y, type) { this.x = x; this.y = y; this.type = type; this.width = 50 * scaleFactor; this.height = 50 * scaleFactor; this.speed = 2.5 * scaleFactor; let imgKey = 'powerupHealth'; if (type === 'rapidFire') imgKey = 'powerupRapidFire'; if (type === 'extraLife') imgKey = 'powerupExtraLife'; if (type === 'wingCannons') imgKey = 'powerupWings'; if (type === 'heavyCannon') imgKey = 'powerupHeavy'; if (type === 'missileSystem') imgKey = 'powerupMissile'; if (type === 'smartBomb') imgKey = 'powerupBomb'; if (type === 'drone') imgKey = 'powerupDrone'; if (type === 'laser') imgKey = 'powerupLaser'; if (type === 'shield') imgKey = 'powerupShield'; if (type === 'slowShot') imgKey = 'powerdownSlow'; this.image = assets[imgKey]; } draw() { if (this.image) ctx.drawImage(this.image, this.x, this.y, this.width, this.height); } update() { this.y += this.speed; } }
     class Asteroid {
-        constructor(type) {
-            this.type = type;
-            // CAMBIO 8: Lógica de Variedad de Sprites
-            let stageVariants;
-// Etapa 3: Después del 3er Súper Jefe
-if (bossesDestroyed >= bossProgression.length + 3) {
-    stageVariants = ['e', 'f'];
-}
-// Etapa 2: Durante los 3 primeros Súper Jefes
-else if (bossesDestroyed >= bossProgression.length) {
-    stageVariants = ['c', 'd'];
-}
-// Etapa 1: Jefes normales
-else {
-    stageVariants = ['a', 'b'];
-}
-const variant = stageVariants[Math.floor(Math.random() * stageVariants.length)];
-this.image = assets[`asteroid${type}_${variant}`] || assets[`asteroid${type}_a`];
+      constructor(type, initialX = null, initialY = null, isSpawnedFromSplit = false) {
+        this.type = type;
+        
+       if (isSpawnedFromSplit) {
+            this.invulnerableUntil = Date.now() + 500; // 500ms de inmunidad
+        } else {
+            this.invulnerableUntil = 0;
+        }
+
+        let stageVariants;
+        if (bossesDestroyed >= bossProgression.length + 3) {
+            stageVariants = ['e', 'f'];
+        } else if (bossesDestroyed >= bossProgression.length) {
+            stageVariants = ['c', 'd'];
+        } else {
+            stageVariants = ['a', 'b'];
+        }
+        const variant = stageVariants[Math.floor(Math.random() * stageVariants.length)];
+        this.image = assets[`asteroid${type}_${variant}`] || assets[`asteroid${type}_a`];
 
             if (this.type === 1) { this.width = 150 * scaleFactor; this.height = 150 * scaleFactor; this.health = 3; } 
             else if (this.type === 2) { this.width = 280 * scaleFactor; this.height = 280 * scaleFactor; this.health = 12; } // CAMBIO 7: Vida aumentada
@@ -465,9 +466,22 @@ this.image = assets[`asteroid${type}_${variant}`] || assets[`asteroid${type}_a`]
             else if (this.type === 4) { this.width = 400 * scaleFactor; this.height = 400 * scaleFactor; this.health = 30; }
             else if (this.type === 5) { this.width = 80 * scaleFactor; this.height = 80 * scaleFactor; this.health = 2; }
             this.maxHealth = this.health;
-            this.x = Math.random() * canvas.width; this.y = 0 - this.height; this.speedX = (Math.random() - 0.5) * 1 * scaleFactor; this.speedY = (Math.random() * 1.5 + 0.5) * scaleFactor; this.angle = 0; this.rotationSpeed = (Math.random() - 0.5) * 0.005;
+            this.x = initialX !== null ? initialX : Math.random() * canvas.width;
+            this.y = initialY !== null ? initialY : 0 - this.height; 
+            this.speedX = (Math.random() - 0.5) * 1 * scaleFactor;
+            this.speedY = (Math.random() * 1.5 + 0.5) * scaleFactor;
+            this.angle = 0;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.005;
         }
-        draw() { if(this.image) { ctx.save(); ctx.translate(this.x + this.width / 2, this.y + this.height / 2); ctx.rotate(this.angle); ctx.drawImage(this.image, -this.width / 2, -this.height / 2, this.width, this.height); ctx.restore(); } }
+        draw() { if(this.image) {
+ ctx.save();
+ ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+ ctx.rotate(this.angle);
+if (this.invulnerableUntil > Date.now()) {
+                ctx.globalAlpha = 0.5;
+            }
+ ctx.drawImage(this.image, -this.width / 2, -this.height / 2, this.width, this.height); 
+ctx.restore(); } }
         update() { this.x += this.speedX; this.y += this.speedY; this.angle += this.rotationSpeed; }
     }
     
@@ -585,11 +599,13 @@ function redistributeDroneAngles() {
         for (let i = 0; i < 100; i++) stars.push(new Star());
         
         currentBossIndex = startProgressionIndex;
+        
+        bossesDestroyed = startProgressionIndex;
         isPostSuperBoss4 = false; // Reiniciar flag
         if (currentBossIndex > bossProgression.length + 3) { isPostSuperBoss4 = true; } // Si empieza en Giga o Final, activar
         
         if (applyAllPowerupsCheat) {
-            playerHealth = diff.maxHealth; playerLives = diff.maxLives; burstFireLevel = 2; wingCannonsActive = true; missileSystemActive = true; missileCharges = GAME_CONFIG.missiles.maxCharges;
+            playerHealth = diff.maxHealth; playerLives = diff.maxLives; burstFireLevel = 2;  wingCannonsLevel = 2; missileSystemActive = true; missileCharges = GAME_CONFIG.missiles.maxCharges;
             if(!missileChargeInterval) { missileChargeInterval = setInterval(() => { if (gameRunning && !isPaused && missileCharges < GAME_CONFIG.missiles.maxCharges) { missileCharges++; } }, GAME_CONFIG.missiles.chargeTime); }
         }
 
@@ -699,19 +715,85 @@ function triggerComboIndicator(x, y, tier) {
         isPaused = !isPaused; if (isPaused) { cancelAnimationFrame(animationFrameId); if (audioAssets.backgroundMusic) audioAssets.backgroundMusic.pause(); if (audioAssets.bossMusic) audioAssets.bossMusic.pause(); const pauseMenu = document.createElement('div'); Object.assign(pauseMenu.style, { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: '#fff', zIndex: '100', fontFamily: "'Arial', sans-serif", backgroundColor: 'rgba(0, 0, 0, 0.85)', padding: '20px', borderRadius: '10px', minWidth: '300px' }); pauseMenu.id = 'pauseMenu'; pauseMenu.innerHTML = `<h1 style="font-size: 2.5em; color: #00ff00; text-shadow: 2px 2px 4px #000; margin-top: 0;">PAUSA</h1><div id="mainPauseButtons" style="margin-bottom: 25px;"><button id="resumeButton" style="padding: 12px 24px; font-size: 1.2em; margin: 5px; cursor: pointer;">Seguir</button><button id="restartButton" style="padding: 12px 24px; font-size: 1.2em; margin: 5px; cursor: pointer;">Reiniciar Nivel</button><button id="exitButton" style="padding: 12px 24px; font-size: 1.2em; margin: 5px; cursor: pointer;">Salir</button></div><div id="pauseSoundControls" style="border-top: 1px solid #444; padding-top: 15px;"><div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px;"><button id="musicToggleButton" style="flex-basis: 45%; padding: 10px;">Música</button><button id="sfxToggleButton" style="flex-basis: 45%; padding: 10px;">SFX</button></div><div style="margin-bottom: 10px;"><label for="musicVolumeSlider">Volumen Música</label><input type="range" id="musicVolumeSlider" min="0" max="1" step="0.05" style="width: 90%;"></div><div><label for="sfxVolumeSlider">Volumen SFX</label><input type="range" id="sfxVolumeSlider" min="0" max="1" step="0.05" style="width: 90%;"></div></div>`; gameContainer.appendChild(pauseMenu); const resumeButton = document.getElementById('resumeButton'); const restartButton = document.getElementById('restartButton'); const exitButton = document.getElementById('exitButton'); const musicToggleButton = document.getElementById('musicToggleButton'); const sfxToggleButton = document.getElementById('sfxToggleButton'); const musicVolumeSlider = document.getElementById('musicVolumeSlider'); const sfxVolumeSlider = document.getElementById('sfxVolumeSlider'); resumeButton.onclick = togglePause; restartButton.onclick = restartCurrentLevel; exitButton.onclick = exitToLobby; const updateMusicButtonText = () => { musicToggleButton.textContent = `Música: ${isMusicOn ? 'ON' : 'OFF'}`; }; const updateSfxButtonText = () => { sfxToggleButton.textContent = `SFX: ${isSfxOn ? 'ON' : 'OFF'}`; }; updateMusicButtonText(); updateSfxButtonText(); musicToggleButton.onclick = () => { isMusicOn = !isMusicOn; updateMusicButtonText(); if (!isMusicOn) { playMusic(null); } }; sfxToggleButton.onclick = () => { isSfxOn = !isSfxOn; updateSfxButtonText(); }; musicVolumeSlider.value = musicVolume; sfxVolumeSlider.value = sfxVolume; musicVolumeSlider.addEventListener('input', (e) => { musicVolume = parseFloat(e.target.value); const currentTrack = (gameState === 'NORMAL_WAVE') ? audioAssets.backgroundMusic : audioAssets.bossMusic; if(currentTrack) currentTrack.volume = musicVolume; }); sfxVolumeSlider.addEventListener('input', (e) => { sfxVolume = parseFloat(e.target.value); }); } else { if (isMusicOn) { const currentTrack = (gameState === 'NORMAL_WAVE') ? audioAssets.backgroundMusic : audioAssets.bossMusic; playMusic(currentTrack); } const pauseMenu = document.getElementById('pauseMenu'); if (pauseMenu) gameContainer.removeChild(pauseMenu); gameLoop(); }
     }
     function exitToLobby() { gameRunning = false; isPaused = false; playMusic(null); [difficultyTimer, asteroidInterval, bossTimer, meteorShowerTimer, aggressiveAsteroidSpawner, missileChargeInterval, slowShotTimeout, waveTimer].forEach(timer => { if(timer) {clearInterval(timer); clearTimeout(timer);} }); const pauseMenu = document.getElementById('pauseMenu'); if (pauseMenu) gameContainer.removeChild(pauseMenu); canvas.style.display = 'none'; lobby.style.display = 'flex'; updateLobbyUI(); }
-    function damagePlayer(amount = 1) { if (isInvulnerable) return;
- if (shieldStacks > 0) {
+function damagePlayer(amount = 1) {
+    if (isInvulnerable) return;
+
+    // --- LÓGICA DEL ESCUDO ---
+    if (shieldStacks > 0) {
         shieldStacks--;
-       if (shieldVisuals.length > 0) {
+        if (shieldVisuals.length > 0) {
             const lastShield = shieldVisuals[shieldVisuals.length - 1];
-            lastShield.state = 'disappearing'; // Inicia la animación de desaparición
+            lastShield.state = 'disappearing';
         }
-        playSound(audioAssets.playerDamaged); // Un sonido para indicar que el escudo fue golpeado
+        playSound(audioAssets.powerupShield);
         triggerDamageVignette();
+
+        isInvulnerable = true;
+        setTimeout(() => { isInvulnerable = false; }, 250);
         return;
     }
-if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); triggerDamageVignette(); isInvulnerable = true; setTimeout(() => { isInvulnerable = false; }, 500); return; } handlePlayerDeath(); }
-    function handlePlayerDeath() { if (isInvulnerable) return; playerLives--; enemiesSinceDamage = 0; playSound(audioAssets.explosionLarge); explosions.push(new Explosion(player.x, player.y, player.width)); if (playerLives <= 0) { gameRunning = false; playMusic(null); [difficultyTimer, asteroidInterval, bossTimer, meteorShowerTimer, aggressiveAsteroidSpawner, missileChargeInterval, slowShotTimeout, waveTimer].forEach(timer => { if (timer) { clearInterval(timer); clearTimeout(timer); } }); showGameOverScreen(); } else { playerHealth = DIFFICULTY_SETTINGS[difficultyLevel].initialHealth; player.x = canvas.width / 2 - player.width / 2; player.y = canvas.height - 150 * scaleFactor; isInvulnerable = true; setTimeout(() => { isInvulnerable = false; }, GAME_CONFIG.player.invulnerabilityDuration); } }
+
+    // --- LÓGICA DE LA SALUD (SI NO HAY ESCUDOS) ---
+    if (playerHealth > 0) {
+        playerHealth--;
+        playSound(audioAssets.playerDamaged);
+        triggerDamageVignette();
+        
+        // <-- INICIO DE LA MODIFICACIÓN: Perder acumulaciones de Power-Ups
+        if (burstFireLevel > 0) burstFireLevel--;
+        if (wingCannonsLevel > 0) wingCannonsLevel--;
+        if (drones.length > 0) {
+            drones.pop(); // Elimina el último dron añadido
+            redistributeDroneAngles(); // Reorganiza los drones restantes
+        }
+        // FIN DE LA MODIFICACIÓN -->
+
+        isInvulnerable = true;
+        setTimeout(() => { isInvulnerable = false; }, 500);
+        return;
+    }
+    
+    // --- MUERTE DEL JUGADOR ---
+    handlePlayerDeath();
+}
+function handlePlayerDeath() {
+    if (isInvulnerable) return;
+    
+    playerLives--;
+    enemiesSinceDamage = 0;
+    playSound(audioAssets.explosionLarge);
+    explosions.push(new Explosion(player.x, player.y, player.width));
+
+    // <-- INICIO DE LA MODIFICACIÓN: Resetear Power-Ups al perder una vida
+    burstFireLevel = 0;
+    wingCannonsLevel = 0;
+    heavyCannonLevel = 0;
+    laserLevel = 0;
+    missileSystemActive = false;
+    drones = [];
+
+    // Limpiar temporizadores y intervalos asociados
+    clearTimeout(heavyCannonTimeout);
+    clearTimeout(laserTimeout);
+    clearInterval(missileChargeInterval);
+    missileChargeInterval = null; // Asegurarse de que se pueda reiniciar
+    // FIN DE LA MODIFICACIÓN -->
+
+    if (playerLives <= 0) {
+        gameRunning = false;
+        playMusic(null);
+        [difficultyTimer, asteroidInterval, bossTimer, meteorShowerTimer, aggressiveAsteroidSpawner, slowShotTimeout, waveTimer].forEach(timer => {
+            if (timer) { clearInterval(timer); clearTimeout(timer); }
+        });
+        showGameOverScreen();
+    } else {
+        playerHealth = DIFFICULTY_SETTINGS[difficultyLevel].initialHealth;
+        player.x = canvas.width / 2 - player.width / 2;
+        player.y = canvas.height - 150 * scaleFactor;
+        isInvulnerable = true;
+        setTimeout(() => { isInvulnerable = false; }, GAME_CONFIG.player.invulnerabilityDuration);
+    }
+}
     function triggerDamageVignette() { const vignette = document.createElement('div'); Object.assign(vignette.style, { position: 'absolute', top: '0', left: '0', width: '100vw', height: '100vh', boxShadow: 'inset 0 0 150px 50px rgba(255, 0, 0, 0.6)', pointerEvents: 'none', zIndex: '998', opacity: '1', transition: 'opacity 0.5s ease-out' }); gameContainer.appendChild(vignette); setTimeout(() => { vignette.style.opacity = '0'; }, 100); setTimeout(() => { if (gameContainer.contains(vignette)) { gameContainer.removeChild(vignette); } }, 600); }
     
     function handleCollisions() { checkPlayerProjectilesVsTargets(); checkSpecialProjectilesVsTargets(); checkEnemyProjectilesVsPlayer(); checkPlayerVsPowerUps(); checkPlayerVsHazards(); }
@@ -722,6 +804,7 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
             let targets = [...bosses, ...enemies, ...asteroids];
             for (let tIndex = targets.length - 1; tIndex >= 0; tIndex--) {
                 const target = targets[tIndex]; if (!target) continue;
+                if (target instanceof Asteroid && target.invulnerableUntil > Date.now()) continue;
                 if (target instanceof Boss && !target.isVulnerable) continue; // CAMBIO 10: Chequeo de vulnerabilidad
                 if (p.x < target.x + target.width && p.x + p.width > target.x && p.y < target.y + target.height && p.y + p.height > target.y) {
                     target.health -= p.damage; playSound(p instanceof Missile ? audioAssets.missileExplosion : audioAssets.hit); explosions.push(new Explosion(p.x, p.y, p instanceof Missile ? 150 * scaleFactor : 30 * scaleFactor));
@@ -736,14 +819,20 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
         let targets = [...bosses, ...enemies, ...asteroids];
         laserBeams.forEach(laser => {
             targets.forEach(target => {
+                if (target instanceof Asteroid && target.invulnerableUntil > Date.now()) return;
                 if (target instanceof Boss && !target.isVulnerable) return; 
-                if (target.health > 0 && !laser.collidedEnemies.has(target)) { if (laser.x < target.x + target.width && laser.x + laser.width > target.x && target.y + target.height < laser.originY) { target.health -= laser.damage; laser.collidedEnemies.add(target); playSound(audioAssets.hit); smallExplosions.push(new SmallExplosion(target.x + target.width / 2, Math.max(target.y, 0))); if (target.health <= 0) { handleTargetDestroyed(target); } } }
+                if (target.health > 0 && !laser.collidedEnemies.has(target)) { if (laser.x < target.x + target.width && laser.x + laser.width > target.x && target.y + target.height < laser.originY) { target.health -= laser.damage; 
+laser.collidedEnemies.add(target);
+ playSound(audioAssets.hit);
+ smallExplosions.push(new SmallExplosion(target.x + target.width / 2, Math.max(target.y, 0)));
+ if (target.health <= 0) { handleTargetDestroyed(target); } } }
             });
         });
         for (let asIndex = asteroidShots.length - 1; asIndex >= 0; asIndex--) {
             const shot = asteroidShots[asIndex]; if (!shot) continue; let hit = false;
             for (let tIndex = targets.length - 1; tIndex >= 0; tIndex--) {
                 const target = targets[tIndex]; if (!target || target === shot) continue;
+                if (target instanceof Asteroid && target.invulnerableUntil > Date.now()) continue;
                 if (target instanceof Boss && !target.isVulnerable) continue; // CAMBIO 10: Chequeo de vulnerabilidad
                 if (shot.x < target.x + target.width && shot.x + shot.width > target.x && shot.y < target.y + target.height && shot.y + shot.height > target.y) { target.health -= shot.damage; hit = true; if (target.health <= 0) { handleTargetDestroyed(target); } }
             }
@@ -751,87 +840,103 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
         }
     }
     function handleTargetDestroyed(target) {
-        if (target instanceof Boss) {
-            if (target.bossType === 'SUPER_BOSS_4') { isPostSuperBoss4 = true; } // CAMBIO 8: Activar flag
-            if (target.bossType === 'FINAL_ENEMY') { startEndingSequence(); return; }
-            const scoreForBoss = target.maxHealth;
-            const pointsFromBoss = addScore(scoreForBoss);
-            createChainedExplosions(target);
-            triggerScreenShake(500, 15 * scaleFactor);
-            bosses.splice(bosses.indexOf(target), 1);
-            if (!scoreAndStatsDisabled) bossesDestroyed++;
-            currentBossIndex++;
-            if (currentBossIndex >= bossProgression.length + superBossProgression.length) { currentBossIndex = 0; }
-            // CAMBIO 12: Iniciar intermedio
-            intermissionData = { name: BOSS_NAMES[target.bossType] || BOSS_NAMES['REGULAR'], score: pointsFromBoss, startTime: Date.now() };
-            gameState = 'INTERMISSION';
-            playSound(audioAssets.intermission);
-            triggerScreenFlash(500);
-
-        } else if (target instanceof Asteroid) {
-    addScore(target.maxHealth);
-    const explosionCount = target.type === 2 ? 2 : (target.type === 4 ? 3 : 1);
-    createMultiExplosion(target, explosionCount);
-    
-    // NUEVA LÓGICA DE DIVISIÓN
-    if (target.type === 4) { // El gigante se divide en 3 de tipo 2
-        asteroids.push(new Asteroid(2, target.x + Math.random()*20-10, target.y + Math.random()*20-10));
-        asteroids.push(new Asteroid(2, target.x + Math.random()*20-10, target.y + Math.random()*20-10));
-        asteroids.push(new Asteroid(2, target.x + Math.random()*20-10, target.y + Math.random()*20-10));
-    } else if (target.type === 2) { // El mediano dispara o se divide en 2 de tipo 1
-        if (Math.random() < 0.50) { 
-            for (let i = 0; i < 6; i++) { 
-                const angle = (i / 6) * (Math.PI * 2); 
-                asteroidShots.push(new AsteroidShot(target.x + target.width/2, target.y + target.height/2, angle)); 
-            }
-        } else {
-            asteroids.push(new Asteroid(1, target.x, target.y));
-            asteroids.push(new Asteroid(1, target.x + target.width*0.5, target.y + target.height*0.5));
+    if (target instanceof Boss) {
+        if (target.bossType === 'SUPER_BOSS_4') {
+            isPostSuperBoss4 = true;
         }
-    } else if (target.type === 1) { // El pequeño se divide en 2 de tipo 3 (rápidos)
-        asteroids.push(new Asteroid(3, target.x, target.y));
-        asteroids.push(new Asteroid(3, target.x + target.width*0.5, target.y + target.height*0.5));
-    }
-    
-    asteroids.splice(asteroids.indexOf(target), 1);
+        if (target.bossType === 'FINAL_ENEMY') {
+            startEndingSequence();
+            return;
+        }
+        const scoreForBoss = target.maxHealth;
+        const pointsFromBoss = addScore(scoreForBoss);
+        createChainedExplosions(target);
+        triggerScreenShake(500, 15 * scaleFactor);
+        bosses.splice(bosses.indexOf(target), 1);
+        if (!scoreAndStatsDisabled) bossesDestroyed++;
+        currentBossIndex++;
+        if (currentBossIndex >= bossProgression.length + superBossProgression.length) {
+            currentBossIndex = 0;
+        }
+        intermissionData = {
+            name: BOSS_NAMES[target.bossType] || BOSS_NAMES['REGULAR'],
+            score: pointsFromBoss,
+            startTime: Date.now()
+        };
+        gameState = 'INTERMISSION';
+        playSound(audioAssets.intermission);
+        triggerScreenFlash(500);
 
-        } else if (target instanceof Enemy) {
-            addScore(target.maxHealth); // CAMBIO 13: Usar nuevo sistema de puntuación
-            playSound(audioAssets.explosionLarge);
-            explosions.push(new Explosion(target.x, target.y, target.width));
-            enemies.splice(enemies.indexOf(target), 1);
-            if (!scoreAndStatsDisabled) {
-    const oldKills = enemiesSinceDamage;
-    enemyDestroyedCount++;
-    enemiesSinceDamage++;
-    const oldTier = getComboTier(oldKills);
-    const newTier = getComboTier(enemiesSinceDamage);
+    } else if (target instanceof Asteroid) { // <-- SE AÑADE ESTE BLOQUE PARA CONTENER LA LÓGICA
+        addScore(target.maxHealth);
+        const explosionCount = target.type === 2 ? 2 : (target.type === 4 ? 3 : 1);
+        createMultiExplosion(target, explosionCount);
 
-    if (newTier > oldTier) {
-        triggerComboIndicator(target.x, target.y, newTier);
+        if (target.type === 4) { // El gigante se divide en 3 de tipo 2
+            asteroids.push(new Asteroid(2, target.x + Math.random() * 20 - 10, target.y + Math.random() * 20 - 10, true));
+        asteroids.push(new Asteroid(2, target.x + Math.random() * 20 - 10, target.y + Math.random() * 20 - 10, true));
+           
+        } else if (target.type === 2) { // El mediano dispara o se divide en 2 de tipo 1
+            if (Math.random() < 0.50) {
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * (Math.PI * 2);
+                    asteroidShots.push(new AsteroidShot(target.x + target.width / 2, target.y + target.height / 2, angle));
+                }
+            } else {
+                asteroids.push(new Asteroid(1, target.x, target.y));
+                asteroids.push(new Asteroid(1, target.x + target.width * 0.5, target.y + target.height * 0.5));
+            }
+        } else if (target.type === 1) { // El pequeño se divide en 2 de tipo 3 (rápidos)
+            asteroids.push(new Asteroid(3, target.x, target.y));
+            asteroids.push(new Asteroid(3, target.x + target.width * 0.5, target.y + target.height * 0.5));
+        }
+
+        asteroids.splice(asteroids.indexOf(target), 1);
+
+    } else if (target instanceof Enemy) { // <-- AHORA ESTE "else if" ESTÁ CORRECTAMENTE CONECTADO
+        addScore(target.maxHealth);
+        playSound(audioAssets.explosionLarge);
+        explosions.push(new Explosion(target.x, target.y, target.width));
+        enemies.splice(enemies.indexOf(target), 1);
+        if (!scoreAndStatsDisabled) {
+            const oldKills = enemiesSinceDamage;
+            enemyDestroyedCount++;
+            enemiesSinceDamage++;
+            const oldTier = getComboTier(oldKills);
+            const newTier = getComboTier(enemiesSinceDamage);
+
+            if (newTier > oldTier) {
+                triggerComboIndicator(target.x, target.y, newTier);
+            }
+            currentComboTier = newTier;
+        }
+
+        if (enemyDestroyedCount > 0 && enemyDestroyedCount % 20 === 0 && !smartBombOnCooldown) {
+            powerUps.push(new PowerUp(target.x, target.y, 'smartBomb'));
+            smartBombOnCooldown = true;
+            setTimeout(() => {
+                smartBombOnCooldown = false;
+            }, GAME_CONFIG.powerups.smartBombCooldown);
+        } else if (Math.random() < powerUpSpawnChance) {
+            const rand = Math.random();
+            let type = 'health';
+            if (rand < 0.15) type = 'slowShot';
+            else if (rand < 0.30) type = 'rapidFire';
+            else if (rand < 0.42) type = 'health';
+            else if (rand < 0.52) type = 'shield';
+            else if (rand < 0.62) type = 'extraLife';
+            else if (rand < 0.72) type = 'wingCannons';
+            else if (rand < 0.82) type = 'heavyCannon';
+            else if (rand < 0.92) type = 'drone';
+            else if (rand < 0.98) type = 'missileSystem'; // <-- CORREGIDO A 0.98 PARA QUE 'laser' TENGA PROBABILIDAD
+            else type = 'laser';
+            powerUps.push(new PowerUp(target.x, target.y, type));
+        }
+        if (gameState === 'NORMAL_WAVE') {
+            spawnEnemies();
+        }
     }
-    currentComboTier = newTier;
 }
-            
-            if (enemyDestroyedCount > 0 && enemyDestroyedCount % 20 === 0 && !smartBombOnCooldown) {
-                powerUps.push(new PowerUp(target.x, target.y, 'smartBomb')); smartBombOnCooldown = true; setTimeout(() => { smartBombOnCooldown = false; }, GAME_CONFIG.powerups.smartBombCooldown);
-            } else if (Math.random() < powerUpSpawnChance) { // CAMBIO 2: Lógica de LuckUp eliminada
-                const rand = Math.random(); let type = 'health';
-                if (rand < 0.15) type = 'slowShot';       // 15%
-    else if (rand < 0.30) type = 'rapidFire'; // 15%
-    else if (rand < 0.42) type = 'health';    // 12%
-    else if (rand < 0.52) type = 'shield';
-    else if (rand < 0.52) type = 'extraLife'; // 10%
-    else if (rand < 0.62) type = 'wingCannons';// 10%
-    else if (rand < 0.72) type = 'heavyCannon';// 10%
-    else if (rand < 0.82) type = 'drone';     // 10%
-    else if (rand < 0.92) type = 'missileSystem'; // <-- AÑADIDO (10%)
-    else type = 'laser';                      // 8%
-                powerUps.push(new PowerUp(target.x, target.y, type));
-            }
-            if (gameState === 'NORMAL_WAVE') { spawnEnemies(); }
-        }
-    }
     function checkEnemyProjectilesVsPlayer() {
         if (!player || isInvulnerable) return;
         const playerHitboxWidth = player.width / 2; const playerHitboxHeight = player.height / 2; const playerHitboxX = player.x + playerHitboxWidth / 2; const playerHitboxY = player.y + playerHitboxHeight / 2;
@@ -1081,6 +1186,8 @@ if (playerHealth > 0) { playerHealth--; playSound(audioAssets.powerupShield); tr
         const hazards = [...asteroids, ...bosses, ...enemies.filter(e => e.type === 8), ...asteroidShots];
         for (let i = hazards.length - 1; i >= 0; i--) {
             const hazard = hazards[i];
+            
+            if (hazard instanceof Asteroid && hazard.invulnerableUntil > Date.now()) continue;
             if (hazard instanceof Boss && !hazard.isVulnerable) continue; // CAMBIO 10: Chequeo de vulnerabilidad
             if (playerHitboxX < hazard.x + hazard.width && playerHitboxX + playerHitboxWidth > hazard.x && playerHitboxY < hazard.y + hazard.height && playerHitboxY + playerHitboxHeight > hazard.y) {
                 enemiesSinceDamage = 0;
