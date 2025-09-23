@@ -160,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentBossIndex = 0;
     let isPostSuperBoss4 = false; // CAMBIO 8: Flag para variedad de asteroides
     let intermissionData = null; // CAMBIO 12: Datos para pantalla de intermedio
+    let waveTimeRemaining = 0;
     let currentComboTier = 0; // Para saber qué icono mostrar en el HUD
     let floatingIndicators = []; // Array para los indicadores flotantes
     let screenShakeDuration = 0;
@@ -640,7 +641,7 @@ function redistributeDroneAngles() {
         powerUpSpawnChance = diff.powerUpChance;
         allowSpawning = true;
         
-        [difficultyTimer, asteroidInterval, bossTimer, meteorShowerTimer, aggressiveAsteroidSpawner, waveTimer].forEach(timer => { if(timer) {clearInterval(timer); clearTimeout(timer);} });
+        [difficultyTimer, asteroidInterval, meteorShowerTimer, aggressiveAsteroidSpawner, waveTimer].forEach(timer => { if(timer) {clearInterval(timer); clearTimeout(timer);} });
         
         difficultyTimer = setInterval(() => { if (gameRunning && !isPaused) { enemySpeedMultiplier += GAME_CONFIG.difficulty.speedMultiplierIncrease; } }, GAME_CONFIG.difficulty.increaseInterval);
         
@@ -677,7 +678,19 @@ function createMobilePauseButton() {
     gameContainer.appendChild(pauseButton);
 }
     function spawnWave(count) { for (let i = 0; i < count; i++) { const randomType = Math.floor(Math.random() * 10) + 1; setTimeout(() => { if (gameRunning) enemies.push(new Enemy(randomType)); }, i * 300); } }
-    function handleGameStateChange(arg) { switch (gameState) { case 'METEOR_SHOWER': playMusic(audioAssets.bossMusic); clearInterval(asteroidInterval); allowSpawning = false; enemies.forEach(e => e.retreating = true); aggressiveAsteroidSpawner = setInterval(() => { if (gameRunning && !isPaused) asteroids.push(new Asteroid(Math.ceil(Math.random() * 5))); }, 700); meteorShowerTimer = setTimeout(() => { gameState = 'BOSS_FIGHT'; handleGameStateChange(); }, 10000); break; case 'BOSS_FIGHT': clearInterval(aggressiveAsteroidSpawner); let bossType; if (currentBossIndex < bossProgression.length) { bossType = bossProgression[currentBossIndex]; } else { const superIndex = currentBossIndex - bossProgression.length; bossType = superBossProgression[superIndex]; } bosses.push(new Boss(bossType)); break; case 'NORMAL_WAVE': playMusic(audioAssets.backgroundMusic); allowSpawning = true; const chargeCycleDuration = (currentBossIndex >= bossProgression.length) ? GAME_CONFIG.gameplay.superBossChargeCycleDuration : GAME_CONFIG.gameplay.chargeCycleDuration; bossTimer = setInterval(() => { gameState = 'METEOR_SHOWER'; handleGameStateChange(); clearInterval(bossTimer); }, chargeCycleDuration); asteroidInterval = setInterval(() => { if (gameRunning && !isPaused && asteroids.length < 5) { const rand = Math.random();
+    function handleGameStateChange(arg) { switch (gameState) { case 'METEOR_SHOWER': playMusic(audioAssets.bossMusic); clearInterval(asteroidInterval); allowSpawning = false; enemies.forEach(e => e.retreating = true); aggressiveAsteroidSpawner = setInterval(() => { if (gameRunning && !isPaused) asteroids.push(new Asteroid(Math.ceil(Math.random() * 5))); }, 700); meteorShowerTimer = setTimeout(() => { gameState = 'BOSS_FIGHT'; handleGameStateChange(); }, 10000); break; case 'BOSS_FIGHT': clearInterval(aggressiveAsteroidSpawner); let bossType; if (currentBossIndex < bossProgression.length) { bossType = bossProgression[currentBossIndex]; } else { const superIndex = currentBossIndex - bossProgression.length; bossType = superBossProgression[superIndex]; } bosses.push(new Boss(bossType)); break; // CÓDIGO CORREGIDO:
+// ...
+case 'NORMAL_WAVE':
+    playMusic(audioAssets.backgroundMusic);
+    allowSpawning = true;
+    const chargeCycleDuration = (currentBossIndex >= bossProgression.length) ? GAME_CONFIG.gameplay.superBossChargeCycleDuration : GAME_CONFIG.gameplay.chargeCycleDuration;
+    
+    
+    waveTimeRemaining = chargeCycleDuration; 
+
+    asteroidInterval = setInterval(() => {
+
+ if (gameRunning && !isPaused && asteroids.length < 5) { const rand = Math.random();
 let type = 1;
 if (rand < 0.55) type = 1;         // 55% de probabilidad (Común)
 else if (rand < 0.80) type = 2;    // 25% de probabilidad (Mediano)
@@ -768,17 +781,41 @@ function triggerComboIndicator(x, y, tier) {
     }
 
   
-    function restartCurrentLevel() { gameRunning = false; isPaused = false; playMusic(null); [difficultyTimer, asteroidInterval, bossTimer, meteorShowerTimer, aggressiveAsteroidSpawner, missileChargeInterval, slowShotTimeout, waveTimer].forEach(timer => { if(timer) {clearInterval(timer); clearTimeout(timer);} }); const pauseMenu = document.getElementById('pauseMenu'); if (pauseMenu) gameContainer.removeChild(pauseMenu); score = 0; enemyDestroyedCount = 0; bossesDestroyed = 0; enemiesSinceDamage = 0; initGame(currentBossIndex); }
+    function restartCurrentLevel() { gameRunning = false; isPaused = false; playMusic(null); [difficultyTimer, asteroidInterval, meteorShowerTimer, aggressiveAsteroidSpawner, missileChargeInterval, slowShotTimeout, waveTimer].forEach(timer => { if(timer) {clearInterval(timer); clearTimeout(timer);} }); const pauseMenu = document.getElementById('pauseMenu'); if (pauseMenu) gameContainer.removeChild(pauseMenu); score = 0; enemyDestroyedCount = 0; bossesDestroyed = 0; enemiesSinceDamage = 0; initGame(currentBossIndex); }
     function togglePause() {
         
-        isPaused = !isPaused; if (isPaused) { cancelAnimationFrame(animationFrameId); if (audioAssets.backgroundMusic) audioAssets.backgroundMusic.pause(); if (audioAssets.bossMusic) audioAssets.bossMusic.pause(); const pauseMenu = document.createElement('div'); Object.assign(pauseMenu.style, { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: '#fff', zIndex: '100', fontFamily: "'Arial', sans-serif", backgroundColor: 'rgba(0, 0, 0, 0.85)', padding: '20px', borderRadius: '10px', minWidth: '300px' }); pauseMenu.id = 'pauseMenu'; pauseMenu.innerHTML = `<h1 style="font-size: 2.5em; color: #00ff00; text-shadow: 2px 2px 4px #000; margin-top: 0;">PAUSA</h1><div id="mainPauseButtons" style="margin-bottom: 25px;"><button id="resumeButton" style="padding: 12px 24px; font-size: 1.2em; margin: 5px; cursor: pointer;">Seguir</button><button id="restartButton" style="padding: 12px 24px; font-size: 1.2em; margin: 5px; cursor: pointer;">Reiniciar Nivel</button><button id="exitButton" style="padding: 12px 24px; font-size: 1.2em; margin: 5px; cursor: pointer;">Salir</button></div><div id="pauseSoundControls" style="border-top: 1px solid #444; padding-top: 15px;"><div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px;"><button id="musicToggleButton" style="flex-basis: 45%; padding: 10px;">Música</button><button id="sfxToggleButton" style="flex-basis: 45%; padding: 10px;">SFX</button></div><div style="margin-bottom: 10px;"><label for="musicVolumeSlider">Volumen Música</label><input type="range" id="musicVolumeSlider" min="0" max="1" step="0.05" style="width: 90%;"></div><div><label for="sfxVolumeSlider">Volumen SFX</label><input type="range" id="sfxVolumeSlider" min="0" max="1" step="0.05" style="width: 90%;"></div></div>`; gameContainer.appendChild(pauseMenu); const resumeButton = document.getElementById('resumeButton'); const restartButton = document.getElementById('restartButton'); const exitButton = document.getElementById('exitButton'); const musicToggleButton = document.getElementById('musicToggleButton'); const sfxToggleButton = document.getElementById('sfxToggleButton'); const musicVolumeSlider = document.getElementById('musicVolumeSlider'); const sfxVolumeSlider = document.getElementById('sfxVolumeSlider'); resumeButton.onclick = togglePause; restartButton.onclick = restartCurrentLevel; exitButton.onclick = exitToLobby; const updateMusicButtonText = () => { musicToggleButton.textContent = `Música: ${isMusicOn ? 'ON' : 'OFF'}`; }; const updateSfxButtonText = () => { sfxToggleButton.textContent = `SFX: ${isSfxOn ? 'ON' : 'OFF'}`; }; updateMusicButtonText(); updateSfxButtonText(); musicToggleButton.onclick = () => { isMusicOn = !isMusicOn; updateMusicButtonText(); if (!isMusicOn) { playMusic(null); } }; sfxToggleButton.onclick = () => { isSfxOn = !isSfxOn; updateSfxButtonText(); }; musicVolumeSlider.value = musicVolume; sfxVolumeSlider.value = sfxVolume; musicVolumeSlider.addEventListener('input', (e) => { musicVolume = parseFloat(e.target.value); const currentTrack = (gameState === 'NORMAL_WAVE') ? audioAssets.backgroundMusic : audioAssets.bossMusic; if(currentTrack) currentTrack.volume = musicVolume; }); sfxVolumeSlider.addEventListener('input', (e) => { sfxVolume = parseFloat(e.target.value); }); } else { if (isMusicOn) { const currentTrack = (gameState === 'NORMAL_WAVE') ? audioAssets.backgroundMusic : audioAssets.bossMusic; playMusic(currentTrack); } const pauseMenu = document.getElementById('pauseMenu'); if (pauseMenu) gameContainer.removeChild(pauseMenu); gameLoop(); }
+        isPaused = !isPaused;
+ if (isPaused) { cancelAnimationFrame(animationFrameId);
+ if (audioAssets.backgroundMusic) audioAssets.backgroundMusic.pause();
+ if (audioAssets.bossMusic) audioAssets.bossMusic.pause(); const pauseMenu = document.createElement('div');
+ Object.assign(pauseMenu.style, { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: '#fff', zIndex: '100', fontFamily: "'Arial', sans-serif", backgroundColor: 'rgba(0, 0, 0, 0.85)', padding: '20px', borderRadius: '10px', minWidth: '300px' });
+ pauseMenu.id = 'pauseMenu';
+ pauseMenu.innerHTML = `<h1 style="font-size: 2.5em; color: #00ff00;
+ text-shadow: 2px 2px 4px #000;
+ margin-top: 0;">PAUSA</h1><div id="mainPauseButtons" style="margin-bottom: 25px;"><button id="resumeButton" style="padding: 12px 24px;
+ font-size: 1.2em; margin: 5px; cursor: pointer;">Seguir</button><button id="restartButton" style="padding: 12px 24px; 
+font-size: 1.2em; margin: 5px; cursor: pointer;">Reiniciar Nivel</button><button id="exitButton" style="padding: 12px 24px; font-size: 1.2em; margin: 5px; cursor: pointer;">Salir</button></div><div id="pauseSoundControls" style="border-top: 1px solid #444; padding-top: 15px;"><div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px;"><button id="musicToggleButton" style="flex-basis: 45%; padding: 10px;">Música</button><button id="sfxToggleButton" style="flex-basis: 45%; padding: 10px;">SFX</button></div><div style="margin-bottom: 10px;"><label for="musicVolumeSlider">Volumen Música</label><input type="range" id="musicVolumeSlider" min="0" max="1" step="0.05" style="width: 90%;"></div><div><label for="sfxVolumeSlider">Volumen SFX</label><input type="range" id="sfxVolumeSlider" min="0" max="1" step="0.05" style="width: 90%;"></div></div>`; gameContainer.appendChild(pauseMenu); const resumeButton = document.getElementById('resumeButton'); const restartButton = document.getElementById('restartButton'); const exitButton = document.getElementById('exitButton'); const musicToggleButton = document.getElementById('musicToggleButton'); const sfxToggleButton = document.getElementById('sfxToggleButton'); const musicVolumeSlider = document.getElementById('musicVolumeSlider'); const sfxVolumeSlider = document.getElementById('sfxVolumeSlider'); resumeButton.onclick = togglePause; restartButton.onclick = restartCurrentLevel; exitButton.onclick = exitToLobby; const updateMusicButtonText = () => { musicToggleButton.textContent = `Música: ${isMusicOn ? 'ON' : 'OFF'}`; }; const updateSfxButtonText = () => { sfxToggleButton.textContent = `SFX: ${isSfxOn ? 'ON' : 'OFF'}`; }; updateMusicButtonText(); updateSfxButtonText(); musicToggleButton.onclick = () => { isMusicOn = !isMusicOn; updateMusicButtonText(); if (!isMusicOn) { playMusic(null); } }; sfxToggleButton.onclick = () => { isSfxOn = !isSfxOn; updateSfxButtonText(); }; musicVolumeSlider.value = musicVolume; sfxVolumeSlider.value = sfxVolume; musicVolumeSlider.addEventListener('input', (e) => { musicVolume = parseFloat(e.target.value); const currentTrack = (gameState === 'NORMAL_WAVE') ? audioAssets.backgroundMusic : audioAssets.bossMusic; if(currentTrack) currentTrack.volume = musicVolume; }); sfxVolumeSlider.addEventListener('input', (e) => { sfxVolume = parseFloat(e.target.value); }); } else {
+    // AÑADIDO: Detener explícitamente la música del lobby/intro
+    if (audioAssets.introMusic) {
+        audioAssets.introMusic.pause();
+        audioAssets.introMusic.currentTime = 0;
+    }
+
+    if (isMusicOn) {
+        const currentTrack = (gameState === 'NORMAL_WAVE') ? audioAssets.backgroundMusic : audioAssets.bossMusic;
+        playMusic(currentTrack);
+    }
+    const pauseMenu = document.getElementById('pauseMenu');
+    if (pauseMenu) gameContainer.removeChild(pauseMenu);
+    gameLoop();
+}
     }
     function exitToLobby() { 
 const mobilePauseBtn = document.getElementById('mobilePauseButton');
     if (mobilePauseBtn) {
         mobilePauseBtn.remove();
     }
-gameRunning = false; isPaused = false; playMusic(null); [difficultyTimer, asteroidInterval, bossTimer, meteorShowerTimer, aggressiveAsteroidSpawner, missileChargeInterval, slowShotTimeout, waveTimer].forEach(timer => { if(timer) {clearInterval(timer); clearTimeout(timer);} }); const pauseMenu = document.getElementById('pauseMenu'); if (pauseMenu) gameContainer.removeChild(pauseMenu); canvas.style.display = 'none'; lobby.style.display = 'flex'; updateLobbyUI(); }
+gameRunning = false; isPaused = false; playMusic(null); [difficultyTimer, asteroidInterval, meteorShowerTimer, aggressiveAsteroidSpawner, missileChargeInterval, slowShotTimeout, waveTimer].forEach(timer => { if(timer) {clearInterval(timer); clearTimeout(timer);} }); const pauseMenu = document.getElementById('pauseMenu'); if (pauseMenu) gameContainer.removeChild(pauseMenu); canvas.style.display = 'none'; lobby.style.display = 'flex'; updateLobbyUI(); }
 function damagePlayer(amount = 1) {
     if (isInvulnerable) return;
 
@@ -846,7 +883,7 @@ function handlePlayerDeath() {
     if (playerLives <= 0) {
         gameRunning = false;
         playMusic(null);
-        [difficultyTimer, asteroidInterval, bossTimer, meteorShowerTimer, aggressiveAsteroidSpawner, slowShotTimeout, waveTimer].forEach(timer => {
+        [difficultyTimer, asteroidInterval, meteorShowerTimer, aggressiveAsteroidSpawner, slowShotTimeout, waveTimer].forEach(timer => {
             if (timer) { clearInterval(timer); clearTimeout(timer); }
         });
         showGameOverScreen();
@@ -1190,7 +1227,13 @@ laser.collidedEnemies.add(target);
             intermissionData = null;
         }
     }
-    
+    if (gameState === 'NORMAL_WAVE') {
+        waveTimeRemaining -= 16.67; // Restamos aprox. lo de 1 fotograma a 60 FPS
+        if (waveTimeRemaining <= 0) {
+            gameState = 'METEOR_SHOWER';
+            handleGameStateChange();
+        }
+    }
     let playerSpeedX = 0, playerSpeedY = 0; 
     if (keys['arrowleft'] || keys['a']) playerSpeedX = -player.speed; 
     if (keys['arrowright'] || keys['d']) playerSpeedX = player.speed; 
