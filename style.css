@@ -153,26 +153,25 @@ canvas {
 .touch-button:active {
     transform: scale(0.95);
     background-color: rgba(255, 255, 255, 0.5);
-
-} 
+}
 #mobilePauseButton {
-    position: fixed;
+    position: absolute;
     top: 20px;
     left: 20px;
-    width: 50px;
-    height: 50px;
-    background-color: rgba(128, 128, 128, 0.5); /* Gris transparente */
+    z-index: 99; /* Justo debajo del menú de pausa */
+    width: 40px;
+    height: 40px;
+    background-color: rgba(255, 255, 255, 0.5);
     border: 2px solid black;
     border-radius: 50%;
     color: black;
-    font-size: 24px;
-    font-weight: bold;
-    text-align: center;
-    line-height: 46px; /* Ajuste para centrar la X verticalmente */
+    font-size: 22px;
+    font-family: Arial, sans-serif;
     cursor: pointer;
-    z-index: 200;
-    display: none; /* Oculto por defecto */
-    user-select: none; /* Evita que se seleccione el texto */
-    -webkit-user-select: none;
-    }
-        
+    /* Centrar la X dentro del círculo */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    line-height: 1;
+}
