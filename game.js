@@ -896,7 +896,34 @@ function handlePlayerDeath() {
     }
 }
     function triggerDamageVignette() { const vignette = document.createElement('div'); Object.assign(vignette.style, { position: 'absolute', top: '0', left: '0', width: '100vw', height: '100vh', boxShadow: 'inset 0 0 150px 50px rgba(255, 0, 0, 0.6)', pointerEvents: 'none', zIndex: '998', opacity: '1', transition: 'opacity 0.5s ease-out' }); gameContainer.appendChild(vignette); setTimeout(() => { vignette.style.opacity = '0'; }, 100); setTimeout(() => { if (gameContainer.contains(vignette)) { gameContainer.removeChild(vignette); } }, 600); }
-    
+    function checkCircularCollision(obj1, obj2) {
+        // Calcula el radio como el 70% de la mitad del lado más corto del sprite.
+        // Esto asegura que el círculo siempre quepa dentro del sprite.
+        const radius1 = (Math.min(obj1.width, obj1.height) / 2) * 0.70;
+        const radius2 = (Math.min(obj2.width, obj2.height) / 2) * 0.70;
+
+        // Calcula el punto central de cada objeto.
+        const centerX1 = obj1.x + obj1.width / 2;
+        const centerY1 = obj1.y + obj1.height / 2;
+        const centerX2 = obj2.x + obj2.width / 2;
+        const centerY2 = obj2.y + obj2.height / 2;
+
+        // Calcula la diferencia en las coordenadas x e y.
+        const dx = centerX1 - centerX2;
+        const dy = centerY1 - centerY2;
+
+        // Calcula la distancia al cuadrado entre los centros.
+        // Usamos la distancia al cuadrado para evitar la costosa operación de raíz cuadrada (sqrt).
+        const distanceSquared = dx * dx + dy * dy;
+
+        // Calcula la suma de los radios al cuadrado.
+        const sumOfRadii = radius1 + radius2;
+        const sumOfRadiiSquared = sumOfRadii * sumOfRadii;
+
+        // Si la distancia al cuadrado es menor que la suma de los radios al cuadrado, hay colisión.
+        return distanceSquared < sumOfRadiiSquared;
+    }
+
     function handleCollisions() { checkPlayerProjectilesVsTargets(); checkSpecialProjectilesVsTargets(); checkEnemyProjectilesVsPlayer(); checkPlayerVsPowerUps(); checkPlayerVsHazards(); }
     function checkPlayerProjectilesVsTargets() {
         const projectiles = [...bullets, ...missiles];
@@ -907,11 +934,11 @@ function handlePlayerDeath() {
                 const target = targets[tIndex]; if (!target) continue;
                 if (target instanceof Asteroid && target.invulnerableUntil > Date.now()) continue;
                 if (target instanceof Boss && !target.isVulnerable) continue; // CAMBIO 10: Chequeo de vulnerabilidad
-                if (p.x < target.x + target.width && p.x + p.width > target.x && p.y < target.y + target.height && p.y + p.height > target.y) {
+                if (checkCircularCollision(p, target)) {
                     target.health -= p.damage; playSound(p instanceof Missile ? audioAssets.missileExplosion : audioAssets.hit); explosions.push(new Explosion(p.x, p.y, p instanceof Missile ? 150 * scaleFactor : 30 * scaleFactor));
                     if(bullets.includes(p)) bullets.splice(bullets.indexOf(p), 1); if(missiles.includes(p)) missiles.splice(missiles.indexOf(p), 1);
                     if (target.health <= 0) { handleTargetDestroyed(target); }
-                    break; 
+                    break;
                 }
             }
         }
@@ -992,8 +1019,13 @@ laser.collidedEnemies.add(target);
                 const target = targets[tIndex]; if (!target || target === shot) continue;
                 if (target instanceof Asteroid && target.invulnerableUntil > Date.now()) continue;
                 if (target instanceof Boss && !target.isVulnerable) continue; // CAMBIO 10: Chequeo de vulnerabilidad
-                if (shot.x < target.x + target.width && shot.x + shot.width > target.x && shot.y < target.y + target.height && shot.y + shot.height > target.y) { target.health -= shot.damage; hit = true; if (target.health <= 0) { handleTargetDestroyed(target); } }
-            }
+                if (checkCircularCollision(shot, target)) { 
+                    target.health -= shot.damage; 
+                    hit = true; 
+                    if (target.health <= 0) { 
+                        handleTargetDestroyed(target); 
+                    } 
+                }}
             if (hit) { playSound(audioAssets.explosionSmall); explosions.push(new Explosion(shot.x, shot.y, 80 * scaleFactor)); asteroidShots.splice(asIndex, 1); }
         }
     }
@@ -1078,8 +1110,12 @@ laser.collidedEnemies.add(target);
         const playerHitboxWidth = player.width / 2; const playerHitboxHeight = player.height / 2; const playerHitboxX = player.x + playerHitboxWidth / 2; const playerHitboxY = player.y + playerHitboxHeight / 2;
         for (let bIndex = enemyBullets.length - 1; bIndex >= 0; bIndex--) {
             const bullet = enemyBullets[bIndex];
-            if (bullet.x < playerHitboxX + playerHitboxWidth && bullet.x + bullet.width > playerHitboxX && bullet.y < playerHitboxY + playerHitboxHeight && bullet.y + bullet.height > playerHitboxY) {
-                enemyBullets.splice(bIndex, 1); smallExplosions.push(new SmallExplosion(bullet.x, bullet.y)); enemiesSinceDamage = 0; damagePlayer(1); return;
+            if (checkCircularCollision(bullet, player)) {
+                enemyBullets.splice(bIndex, 1); 
+                smallExplosions.push(new SmallExplosion(bullet.x, bullet.y)); 
+                enemiesSinceDamage = 0; 
+                damagePlayer(1); 
+                return;
             }
         }
     }
@@ -1087,8 +1123,9 @@ laser.collidedEnemies.add(target);
         if (!player) return;
         for (let pIndex = powerUps.length - 1; pIndex >= 0; pIndex--) {
             const powerUp = powerUps[pIndex];
-            if (player.x < powerUp.x + powerUp.width && player.x + player.width > powerUp.x && player.y < powerUp.y + powerUp.height && player.y + player.height > powerUp.y) {
-                applyPowerUp(powerUp.type); powerUps.splice(pIndex, 1);
+            if (checkCircularCollision(player, powerUp)) {
+                applyPowerUp(powerUp.type); 
+                powerUps.splice(pIndex, 1);
             }
         }
     }
@@ -1340,28 +1377,33 @@ laser.collidedEnemies.add(target);
             
             if (hazard instanceof Asteroid && hazard.invulnerableUntil > Date.now()) continue;
             if (hazard instanceof Boss && !hazard.isVulnerable) continue; // CAMBIO 10: Chequeo de vulnerabilidad
-            if (playerHitboxX < hazard.x + hazard.width && playerHitboxX + playerHitboxWidth > hazard.x && playerHitboxY < hazard.y + hazard.height && playerHitboxY + playerHitboxHeight > hazard.y) {
+             if (checkCircularCollision(player, hazard)) {
                 enemiesSinceDamage = 0;
-            if (isGodMode) { // <-- AÑADE ESTA LÓGICA
-        hazard.health -= 15;
-        if (hazard.health <= 0) {
-            handleTargetDestroyed(hazard);
-        }
-        return; // No recibe daño el jugador
-    }
-                if (hazard instanceof Asteroid) { playSound(audioAssets.explosionLarge); explosions.push(new Explosion(hazard.x, hazard.y, hazard.width)); asteroids.splice(asteroids.indexOf(hazard), 1); handlePlayerDeath(); return; }
+                if (isGodMode) {
+                    hazard.health -= 15;
+                    if (hazard.health <= 0) {
+                        handleTargetDestroyed(hazard);
+                    }
+                    return; // No recibe daño el jugador
+                }
+                if (hazard instanceof Asteroid) {
+                    playSound(audioAssets.explosionLarge);
+                    explosions.push(new Explosion(hazard.x, hazard.y, hazard.width));
+                    asteroids.splice(asteroids.indexOf(hazard), 1);
+                    handlePlayerDeath();
+                    return;
+                }
                 if (hazard instanceof AsteroidShot) {
-    damagePlayer(1);
-    asteroidShots.splice(asteroidShots.indexOf(hazard), 1);
-    // El disparo de asteroide solo daña y desaparece.
-} else if (hazard instanceof Boss || hazard.type === 8) {
-    damagePlayer(1);
-    if (hazard.type === 8) { 
-        hazard.health = 0; 
-        handleTargetDestroyed(hazard); // El kamikaze sí debe procesarse como destruido.
-    }
-}
-return;
+                    damagePlayer(1);
+                    asteroidShots.splice(asteroidShots.indexOf(hazard), 1);
+                } else if (hazard instanceof Boss || hazard.type === 8) {
+                    damagePlayer(1);
+                    if (hazard.type === 8) {
+                        hazard.health = 0;
+                        handleTargetDestroyed(hazard);
+                    }
+                }
+                return;
             }
         }
     }
